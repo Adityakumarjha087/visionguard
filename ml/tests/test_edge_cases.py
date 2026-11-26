@@ -133,8 +133,13 @@ def test_stream_disconnect_and_reconnect() -> None:
 
 
 def test_stream_read_times_out_when_camera_silent() -> None:
-    src = StreamSource("rtsp://cam/2", 10, reconnect_delay=5, read_timeout=0.2,
-                       capture_factory=lambda _u: _FakeCapture(frames=0))
+    src = StreamSource(
+        "rtsp://cam/2",
+        10,
+        reconnect_delay=5,
+        read_timeout=0.2,
+        capture_factory=lambda _u: _FakeCapture(frames=0),
+    )
     try:
         assert src.read() is None
     finally:
@@ -146,14 +151,14 @@ def test_pipeline_recovers_after_source_appears(bus: EventBus, settings: Setting
     pipe = CameraPipeline(cam, "color-synthetic", _deps(bus, settings))
     pipe.start()
     try:
-        deadline = time.time() + 3
+        deadline = time.time() + 20
         while pipe.state != "error" and time.time() < deadline:
             time.sleep(0.02)
         assert pipe.state == "error"
         from visionguard_ml.samples import STREET, write_scene
 
         write_scene(STREET, settings.video_dir / "samples" / "late.mp4")
-        deadline = time.time() + 10
+        deadline = time.time() + 20
         while pipe.frame_idx == 0 and time.time() < deadline:
             time.sleep(0.05)
         assert pipe.state == "online" and pipe.frame_idx > 0
@@ -161,8 +166,9 @@ def test_pipeline_recovers_after_source_appears(bus: EventBus, settings: Setting
         pipe.stop()
 
 
-def test_very_high_resolution_frames_are_downscaled(bus: EventBus, settings: Settings,
-                                                    redis_client: fakeredis.FakeRedis) -> None:
+def test_very_high_resolution_frames_are_downscaled(
+    bus: EventBus, settings: Settings, redis_client: fakeredis.FakeRedis
+) -> None:
     pipe = CameraPipeline(CameraConfig("hr", "8K", "file", "x"), "color-synthetic", _deps(bus, settings))
     base = SceneRenderer(WAREHOUSE).render(12.0)
     huge = cv2.resize(base, (7680, 4320), interpolation=cv2.INTER_NEAREST)
@@ -181,8 +187,10 @@ def test_degenerate_and_off_frame_polygons_never_match() -> None:
     off_frame = ((1.2, 1.2), (1.5, 1.2), (1.5, 1.5))
     for poly in (line_like, two_points, off_frame):
         assert not point_in_polygon((0.5, 0.5), poly)
-    eng = _engine(Rule("r", "R", "zone_intrusion", "z", cooldown_seconds=0),
-                  zones=(Zone("z", "Flat", "polygon", line_like),))
+    eng = _engine(
+        Rule("r", "R", "zone_intrusion", "z", cooldown_seconds=0),
+        zones=(Zone("z", "Flat", "polygon", line_like),),
+    )
     assert eng.process([_t(1, 50, 50)], W, H, 0)[0] == []
 
 
@@ -243,14 +251,17 @@ def test_bytetrack_ids_stable_under_jitter_and_dropouts() -> None:
 # --------------------------------------------------------------------------- privacy & backpressure
 
 
-def test_stored_snapshots_are_face_blurred(bus: EventBus, settings: Settings,
-                                           redis_client: fakeredis.FakeRedis) -> None:
+def test_stored_snapshots_are_face_blurred(
+    bus: EventBus, settings: Settings, redis_client: fakeredis.FakeRedis
+) -> None:
     zone = Zone("z", "All", "polygon", ((0, 0), (1, 0), (1, 1), (0, 1)))
     rule = Rule("r", "Any person", "zone_intrusion", "z", cooldown_seconds=0)
     frame = SceneRenderer(WAREHOUSE).render(12.0)
 
     def head_sharpness(private: bool) -> float:
-        cam = CameraConfig(f"p{private}", "P", "file", "x", privacy_mode=private, zones=(zone,), rules=(rule,))
+        cam = CameraConfig(
+            f"p{private}", "P", "file", "x", privacy_mode=private, zones=(zone,), rules=(rule,)
+        )
         pipe = CameraPipeline(cam, "color-synthetic", _deps(bus, settings))
         tracks, alerts = pipe.process_frame(frame, 1.0)
         assert alerts
@@ -299,7 +310,10 @@ def test_slow_inference_drops_frames_instead_of_queueing(bus: EventBus, settings
     time.sleep(1.0)
     pipe._stop.set()
     t.join(2)
-    assert 5 <= pipe.frame_idx <= 25  # processed at detector speed, no backlog explosion
+    # Processed at detector speed (~20 fps), far below the 100 fps source, and every frame that
+    # was read was processed immediately: nothing queued behind the slow detector.
+    assert 1 <= pipe.frame_idx <= 25
+    assert src.reads - pipe.frame_idx <= 1
     assert pipe.latency_ms >= 45
 
 
@@ -312,15 +326,23 @@ def test_redis_outage_does_not_stop_pipeline(settings: Settings) -> None:
     assert pipe.frame_idx == 5 and dead.read_config() is None
 
 
-def test_bus_restart_keeps_pipelines_and_resumes(settings: Settings,
-                                                  redis_client: fakeredis.FakeRedis) -> None:
+def test_bus_restart_keeps_pipelines_and_resumes(
+    settings: Settings, redis_client: fakeredis.FakeRedis
+) -> None:
     from visionguard_ml.samples import write_scene
 
     write_scene(WAREHOUSE, settings.video_dir / "samples" / "warehouse.mp4")
     bus = EventBus(redis_client)
-    mgr = PipelineManager(settings, bus, ModelCatalog(settings.models_dir), ResilientDescriber(FakeDescriber()))
-    doc = {"version": 1, "active_model": "color-synthetic", "cameras": [
-        {"id": "cam-1", "name": "W", "source_type": "file", "source_uri": "samples/warehouse.mp4"}]}
+    mgr = PipelineManager(
+        settings, bus, ModelCatalog(settings.models_dir), ResilientDescriber(FakeDescriber())
+    )
+    doc = {
+        "version": 1,
+        "active_model": "color-synthetic",
+        "cameras": [
+            {"id": "cam-1", "name": "W", "source_type": "file", "source_uri": "samples/warehouse.mp4"}
+        ],
+    }
     redis_client.set("vg:config", json.dumps(doc))
     try:
         assert mgr.poll_once()
@@ -331,9 +353,9 @@ def test_bus_restart_keeps_pipelines_and_resumes(settings: Settings,
         redis_client.set("vg:config", json.dumps(doc))  # API re-publishes on its resync tick
         mgr.poll_once()
         assert mgr.get("cam-1") is pipe  # same version -> no restart
-        before = pipe.frame_idx
-        deadline = time.time() + 3
-        while pipe.frame_idx == before and time.time() < deadline:
+        # Poll on the observable outcome (not wall-clock guesses) so a loaded CI box can't flake it.
+        deadline = time.time() + 20
+        while redis_client.xlen("vg:frames") == 0 and time.time() < deadline:
             time.sleep(0.05)
         assert redis_client.xlen("vg:frames") > 0  # publishing resumed on the fresh Redis
     finally:

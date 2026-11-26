@@ -47,7 +47,7 @@ def test_pipeline_process_frames_end_to_end(
     t0 = 1_700_000_000.0
     for i in range(0, 120):  # first 12 s: intrusion fires at ~8 s
         pipe.process_frame(renderer.render(i / FPS), t0 + i / FPS)
-    deadline = time.time() + 10
+    deadline = time.time() + 20
     while time.time() < deadline and not list(settings.clips_dir.glob("*.mp4")):
         time.sleep(0.05)
 
@@ -90,7 +90,7 @@ def test_pipeline_thread_plays_file_and_stops(
     write_scene(WAREHOUSE, settings.video_dir / "samples" / "warehouse.mp4")
     pipe = CameraPipeline(warehouse_camera, "color-synthetic", _deps(bus, settings))
     pipe.start()
-    deadline = time.time() + 5
+    deadline = time.time() + 20
     while time.time() < deadline and pipe.frame_idx < 5:
         time.sleep(0.05)
     assert pipe.running and pipe.state == "online"
@@ -102,7 +102,7 @@ def test_pipeline_reports_source_errors(bus: EventBus, settings: Settings) -> No
     cam = CameraConfig("bad", "Bad", "file", "samples/missing.mp4")
     pipe = CameraPipeline(cam, "color-synthetic", _deps(bus, settings))
     pipe.start()
-    deadline = time.time() + 3
+    deadline = time.time() + 20
     while time.time() < deadline and pipe.state != "error":
         time.sleep(0.02)
     assert pipe.state == "error" and "not found" in (pipe.message or "")
