@@ -1,0 +1,173 @@
+name: visionguard
+
+# CPU stack by default. `docker compose --profile gpu up` adds a CUDA inference service
+# (requires an NVIDIA GPU + container toolkit; untested on Apple Silicon).
+x-inference-env: &inference-env
+  VG_REDIS_URL: redis://redis:6379/0
+  VG_DATA_DIR: /data
+  VG_MODELS_DIR: /models
+  VG_BENCHMARKS_FILE: /app/benchmarks/results.json
+  VG_LOG_LEVEL: ${VG_LOG_LEVEL:-INFO}
+  VG_VISION_PROVIDER: ${VG_VISION_PROVIDER:-fake}
+  VG_VISION_MODEL: ${VG_VISION_MODEL:-}
+  VG_ANTHROPIC_API_KEY: ${VG_ANTHROPIC_API_KEY:-}
+  VG_OPENAI_API_KEY: ${VG_OPENAI_API_KEY:-}
+  VG_GEMINI_API_KEY: ${VG_GEMINI_API_KEY:-}
+  VG_OLLAMA_BASE_URL: ${VG_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+
+services:
+  timescale:
+    image: timescale/timescaledb:latest-pg17
+    container_name: visionguard-timescale
+    environment:
+      POSTGRES_USER: visionguard
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-visionguard}
+      POSTGRES_DB: visionguard
+      TIMESCALEDB_TELEMETRY: "off"
+    ports: ["20910:5432"]
+    volumes: [visionguard-pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visionguard -d visionguard"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: visionguard-redis
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "noeviction"]
+    ports: ["20911:6379"]
+    volumes: [visionguard-redisdata:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  inference:
+    build: { context: ./ml, dockerfile: Dockerfile }
+    image: visionguard-inference:latest
+    container_name: visionguard-inference
+    environment: *inference-env
+    ports: ["20902:8000"]
+    volumes:
+      - visionguard-media:/data
+      - ./ml/models:/models:ro
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      start_period: 40s
+      retries: 10
+
+  inference-gpu:
+    profiles: ["gpu"]
+    build: { context: ./ml, dockerfile: Dockerfile, args: { ONNX_PACKAGE: onnxruntime-gpu } }
+    image: visionguard-inference-gpu:latest
+    container_name: visionguard-inference-gpu
+    environment: *inference-env
+    volumes:
+      - visionguard-media:/data
+      - ./ml/models:/models:ro
+    depends_on:
+      redis: { condition: service_healthy }
+    deploy:
+      resources:
+        reservations:
+          devices: [{ driver: nvidia, count: all, capabilities: [gpu] }]
+
+  api:
+    build: { context: ./backend, dockerfile: Dockerfile }
+    image: visionguard-api:latest
+    container_name: visionguard-api
+    environment:
+      VG_ENV: ${VG_ENV:-development}
+      VG_DATABASE_URL: postgres://visionguard:${POSTGRES_PASSWORD:-visionguard}@timescale:5432/visionguard?sslmode=disable
+      VG_REDIS_URL: redis://redis:6379/0
+      VG_INFERENCE_URL: http://inference:8000
+      VG_DATA_DIR: /data
+      VG_JWT_SECRET: ${VG_JWT_SECRET:-dev-only-insecure-secret-change-me}
+      VG_CORS_ORIGINS: ${VG_CORS_ORIGINS:-http://localhost:20900,http://127.0.0.1:20900}
+      VG_PUBLIC_URL: ${VG_PUBLIC_URL:-http://localhost:20900}
+      VG_AUTO_SEED: ${VG_AUTO_SEED:-true}
+      VG_BENCHMARKS_FILE: /app/benchmarks/results.json
+      VG_SMTP_HOST: ${VG_SMTP_HOST:-}
+      VG_SMTP_PORT: ${VG_SMTP_PORT:-587}
+      VG_SMTP_USERNAME: ${VG_SMTP_USERNAME:-}
+      VG_SMTP_PASSWORD: ${VG_SMTP_PASSWORD:-}
+      VG_SMTP_FROM: ${VG_SMTP_FROM:-alerts@visionguard.local}
+      VG_SMTP_TO: ${VG_SMTP_TO:-}
+      VG_TELEGRAM_BOT_TOKEN: ${VG_TELEGRAM_BOT_TOKEN:-}
+      VG_TELEGRAM_CHAT_ID: ${VG_TELEGRAM_CHAT_ID:-}
+    ports: ["20901:8080"]
+    volumes:
+      - visionguard-media:/data
+      - ./ml/benchmarks:/app/benchmarks:ro
+    depends_on:
+      timescale: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/readyz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      args: { NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:20901}" }
+    image: visionguard-frontend:latest
+    container_name: visionguard-frontend
+    ports: ["20900:3000"]
+    depends_on:
+      api: { condition: service_healthy }
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: visionguard-prometheus
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    ports: ["20920:9090"]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - visionguard-prometheus:/prometheus
+    depends_on: [api, inference]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    container_name: visionguard-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-visionguard}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: dark
+    ports: ["20921:3000"]
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - visionguard-grafana:/var/lib/grafana
+    depends_on: [prometheus]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  visionguard-pgdata:
+  visionguard-redisdata:
+  visionguard-media:
+  visionguard-prometheus:
+  visionguard-grafana:
+
+networks:
+  default:
+    name: visionguard-net
