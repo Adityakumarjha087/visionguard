@@ -145,7 +145,7 @@ func (t *TelegramChannel) Send(ctx context.Context, inc domain.Incident) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("telegram returned %d", resp.StatusCode)
 	}

@@ -63,6 +63,9 @@ func (s *Store) InsertIncident(ctx context.Context, n NewIncident) (inc domain.I
 	if n.Metadata == nil {
 		n.Metadata = map[string]any{}
 	}
+	if n.TrackIDs == nil {
+		n.TrackIDs = []int32{}
+	}
 	tag, err := s.pool.Exec(ctx, `INSERT INTO incidents (id, camera_id, rule_id, rule_name, rule_type, severity,
 		occurred_at, message, object_class, track_ids, snapshot_path, metadata)
 		VALUES ($1, $2, (SELECT id FROM rules WHERE id::text = $3), $4, $5, $6, $7, $8, $9, $10, $11, $12)

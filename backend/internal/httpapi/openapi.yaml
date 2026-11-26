@@ -1,1 +1,302 @@
 openapi: 3.0.3
+info:
+  title: VisionGuard API
+  version: 0.1.0
+  description: |
+    Real-time computer-vision monitoring: cameras, zones, rules, incidents, analytics and models.
+    Errors use `{"error": {"code", "message", "details"}}`. Roles: admin > operator > viewer.
+    Live data is pushed on `GET /api/v1/ws?access_token=` (see docs/API.md for message shapes).
+servers:
+  - url: http://localhost:20901
+security:
+  - bearer: []
+tags:
+  - name: auth
+  - name: users
+  - name: cameras
+  - name: zones
+  - name: rules
+  - name: incidents
+  - name: analytics
+  - name: models
+  - name: system
+paths:
+  /healthz:
+    get: { tags: [system], security: [], summary: Liveness, responses: { "200": { description: OK } } }
+  /readyz:
+    get: { tags: [system], security: [], summary: Readiness (DB + Redis), responses: { "200": { description: Ready }, "503": { description: Degraded } } }
+  /metrics:
+    get: { tags: [system], security: [], summary: Prometheus metrics, responses: { "200": { description: OK } } }
+  /api/v1/auth/register:
+    post:
+      tags: [auth]
+      security: []
+      summary: Register (role viewer)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RegisterRequest" } } } }
+      responses:
+        "201": { $ref: "#/components/responses/Auth" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      security: []
+      summary: Log in
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/LoginRequest" } } } }
+      responses:
+        "200": { $ref: "#/components/responses/Auth" }
+        "401": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /api/v1/auth/refresh:
+    post:
+      tags: [auth]
+      security: []
+      summary: Rotate refresh token (reuse revokes all sessions)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RefreshRequest" } } } }
+      responses: { "200": { $ref: "#/components/responses/Auth" }, "401": { $ref: "#/components/responses/Error" } }
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      security: []
+      summary: Revoke a refresh token
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RefreshRequest" } } } }
+      responses: { "204": { description: Logged out } }
+  /api/v1/auth/me:
+    get: { tags: [auth], summary: Current user, responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } } } }
+  /api/v1/users:
+    get: { tags: [users], summary: List users (admin), responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/User" } } } } }, "403": { $ref: "#/components/responses/Error" } } }
+  /api/v1/users/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [users]
+      summary: Update name/role (admin)
+      requestBody: { content: { application/json: { schema: { type: object, properties: { name: { type: string }, role: { $ref: "#/components/schemas/Role" } } } } } }
+      responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } }
+    delete: { tags: [users], summary: Delete user (admin), responses: { "204": { description: Deleted } } }
+  /api/v1/cameras:
+    get: { tags: [cameras], summary: List cameras with live status, responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Camera" } } } } } } }
+    post:
+      tags: [cameras]
+      summary: Register a camera (operator)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/CameraInput" } } } }
+      responses: { "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Camera" } } } }, "422": { $ref: "#/components/responses/Error" } }
+  /api/v1/cameras/upload:
+    post:
+      tags: [cameras]
+      summary: Upload a video file and register it as a looping camera (operator)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { type: object, required: [file], properties: { file: { type: string, format: binary }, name: { type: string } } }
+      responses: { "201": { description: Created }, "413": { $ref: "#/components/responses/Error" }, "422": { $ref: "#/components/responses/Error" } }
+  /api/v1/cameras/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get: { tags: [cameras], summary: Get camera, responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Camera" } } } }, "404": { $ref: "#/components/responses/Error" } } }
+    patch:
+      tags: [cameras]
+      summary: Update camera (operator)
+      requestBody: { content: { application/json: { schema: { $ref: "#/components/schemas/CameraPatch" } } } }
+      responses: { "200": { description: OK } }
+    delete: { tags: [cameras], summary: Delete camera and its data (operator), responses: { "204": { description: Deleted } } }
+  /api/v1/cameras/{id}/stream:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/AccessToken" }]
+    get: { tags: [cameras], summary: MJPEG live stream (proxied from inference), responses: { "200": { description: multipart/x-mixed-replace stream } } }
+  /api/v1/cameras/{id}/snapshot:
+    parameters: [{ $ref: "#/components/parameters/Id" }, { $ref: "#/components/parameters/AccessToken" }]
+    get: { tags: [cameras], summary: Latest frame JPEG, responses: { "200": { description: image/jpeg } } }
+  /api/v1/samples:
+    get: { tags: [cameras], summary: Bundled synthetic sample videos, responses: { "200": { description: OK } } }
+  /api/v1/cameras/{id}/zones:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get: { tags: [zones], summary: List zones, responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Zone" } } } } } } }
+    post:
+      tags: [zones]
+      summary: Create zone (operator)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneInput" } } } }
+      responses: { "201": { description: Created }, "422": { $ref: "#/components/responses/Error" } }
+  /api/v1/zones/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    put:
+      tags: [zones]
+      summary: Replace zone (operator)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/ZoneInput" } } } }
+      responses: { "200": { description: OK } }
+    delete: { tags: [zones], summary: Delete zone (cascades to its rules), responses: { "204": { description: Deleted } } }
+  /api/v1/rules:
+    get:
+      tags: [rules]
+      summary: List rules
+      parameters: [{ name: camera_id, in: query, schema: { type: string } }]
+      responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Rule" } } } } } }
+  /api/v1/cameras/{id}/rules:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [rules]
+      summary: Create rule (operator)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RuleInput" } } } }
+      responses: { "201": { description: Created }, "422": { $ref: "#/components/responses/Error" } }
+  /api/v1/rules/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    put:
+      tags: [rules]
+      summary: Replace rule (operator)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: "#/components/schemas/RuleInput" } } } }
+      responses: { "200": { description: OK } }
+    delete: { tags: [rules], summary: Delete rule, responses: { "204": { description: Deleted } } }
+  /api/v1/incidents:
+    get:
+      tags: [incidents]
+      summary: Search incidents
+      parameters:
+        - { name: q, in: query, description: Full-text search over rule, message and AI description, schema: { type: string } }
+        - { name: camera_id, in: query, schema: { type: string } }
+        - { name: severity, in: query, schema: { $ref: "#/components/schemas/Severity" } }
+        - { name: status, in: query, schema: { type: string, enum: [open, acknowledged, resolved] } }
+        - { name: rule_type, in: query, schema: { $ref: "#/components/schemas/RuleType" } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: page_size, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+      responses: { "200": { description: Page of incidents } }
+  /api/v1/incidents/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get: { tags: [incidents], summary: Get incident, responses: { "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Incident" } } } } } }
+    patch:
+      tags: [incidents]
+      summary: Acknowledge / resolve (operator)
+      requestBody: { required: true, content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [open, acknowledged, resolved] } } } } } }
+      responses: { "200": { description: OK } }
+  /api/v1/media/{kind}/{file}:
+    parameters:
+      - { name: kind, in: path, required: true, schema: { type: string, enum: [snapshots, clips] } }
+      - { name: file, in: path, required: true, schema: { type: string } }
+      - { $ref: "#/components/parameters/AccessToken" }
+    get: { tags: [incidents], summary: Incident snapshot (JPEG) or clip (MP4, Range supported), responses: { "200": { description: Binary } } }
+  /api/v1/analytics/summary:
+    get: { tags: [analytics], summary: Dashboard KPIs, parameters: [{ name: camera_id, in: query, schema: { type: string } }], responses: { "200": { description: OK } } }
+  /api/v1/analytics/counts:
+    get:
+      tags: [analytics]
+      summary: Object counts over time (TimescaleDB time_bucket)
+      parameters: [{ $ref: "#/components/parameters/CameraQ" }, { $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/Bucket" }]
+      responses: { "200": { description: OK } }
+  /api/v1/analytics/heatmap:
+    get:
+      tags: [analytics]
+      summary: Movement heatmap (row-major cells)
+      parameters:
+        - { name: camera_id, in: query, required: true, schema: { type: string } }
+        - { $ref: "#/components/parameters/From" }
+        - { $ref: "#/components/parameters/To" }
+        - { name: grid, in: query, schema: { type: integer, default: 32, minimum: 8, maximum: 128 } }
+      responses: { "200": { description: OK } }
+  /api/v1/analytics/line-crossings:
+    get:
+      tags: [analytics]
+      summary: Line-crossing counts in/out
+      parameters: [{ $ref: "#/components/parameters/CameraQ" }, { $ref: "#/components/parameters/From" }, { $ref: "#/components/parameters/To" }, { $ref: "#/components/parameters/Bucket" }]
+      responses: { "200": { description: OK } }
+  /api/v1/models:
+    get: { tags: [models], summary: Detector catalogue with benchmarks, responses: { "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Model" } } } } } } }
+  /api/v1/models/{id}/activate:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    post: { tags: [models], summary: Switch the active detector (admin), responses: { "200": { description: OK }, "409": { $ref: "#/components/responses/Error" } } }
+  /api/v1/ws:
+    get: { tags: [system], summary: WebSocket upgrade (frames, alerts, incident updates, camera status), parameters: [{ $ref: "#/components/parameters/AccessToken" }], responses: { "101": { description: Switching protocols } } }
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    AccessToken: { name: access_token, in: query, description: JWT for clients that cannot set headers, schema: { type: string } }
+    CameraQ: { name: camera_id, in: query, schema: { type: string } }
+    From: { name: from, in: query, schema: { type: string, format: date-time } }
+    To: { name: to, in: query, schema: { type: string, format: date-time } }
+    Bucket: { name: bucket, in: query, schema: { type: string, enum: ["10s", "1m", "5m", "15m", "1h"] } }
+  responses:
+    Auth: { description: Tokens, content: { application/json: { schema: { $ref: "#/components/schemas/AuthResponse" } } } }
+    Error: { description: Error, content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+  schemas:
+    Role: { type: string, enum: [admin, operator, viewer] }
+    Severity: { type: string, enum: [low, medium, high, critical] }
+    RuleType: { type: string, enum: [zone_intrusion, dwell_time, missing_ppe, crowd_count, line_crossing] }
+    Error:
+      type: object
+      properties:
+        error: { type: object, properties: { code: { type: string }, message: { type: string }, details: { type: object, additionalProperties: { type: string } } } }
+    RegisterRequest: { type: object, required: [email, password, name], properties: { email: { type: string, format: email }, password: { type: string, minLength: 8 }, name: { type: string } } }
+    LoginRequest: { type: object, required: [email, password], properties: { email: { type: string }, password: { type: string } } }
+    RefreshRequest: { type: object, required: [refresh_token], properties: { refresh_token: { type: string } } }
+    User: { type: object, properties: { id: { type: string }, email: { type: string }, name: { type: string }, role: { $ref: "#/components/schemas/Role" }, created_at: { type: string, format: date-time } } }
+    AuthResponse: { type: object, properties: { access_token: { type: string }, refresh_token: { type: string }, token_type: { type: string }, expires_in: { type: integer }, user: { $ref: "#/components/schemas/User" } } }
+    CameraInput:
+      type: object
+      required: [name, source_type, source_uri]
+      properties:
+        name: { type: string }
+        source_type: { type: string, enum: [rtsp, webcam, file] }
+        source_uri: { type: string, example: samples/warehouse.mp4 }
+        enabled: { type: boolean, default: true }
+        privacy_mode: { type: boolean, default: true }
+        target_fps: { type: number, default: 10, maximum: 30 }
+    CameraPatch: { type: object, properties: { name: { type: string }, source_uri: { type: string }, enabled: { type: boolean }, privacy_mode: { type: boolean }, target_fps: { type: number } } }
+    Camera:
+      allOf:
+        - $ref: "#/components/schemas/CameraInput"
+        - type: object
+          properties:
+            id: { type: string }
+            status: { type: object, properties: { state: { type: string, enum: [starting, online, offline, error, disabled] }, fps: { type: number }, latency_ms: { type: number }, message: { type: string } } }
+    ZoneInput:
+      type: object
+      required: [name, kind, points]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [polygon, line] }
+        points: { type: array, items: { type: array, items: { type: number, minimum: 0, maximum: 1 }, minItems: 2, maxItems: 2 } }
+        color: { type: string, example: "#22c55e" }
+    Zone: { allOf: [{ $ref: "#/components/schemas/ZoneInput" }, { type: object, properties: { id: { type: string }, camera_id: { type: string } } }] }
+    RuleInput:
+      type: object
+      required: [name, type]
+      properties:
+        name: { type: string }
+        type: { $ref: "#/components/schemas/RuleType" }
+        zone_id: { type: string, nullable: true }
+        params: { type: object, properties: { classes: { type: array, items: { type: string } }, seconds: { type: number }, max_count: { type: integer }, cooldown_seconds: { type: number } } }
+        severity: { $ref: "#/components/schemas/Severity" }
+        enabled: { type: boolean }
+        notify_email: { type: boolean }
+        notify_telegram: { type: boolean }
+    Rule: { allOf: [{ $ref: "#/components/schemas/RuleInput" }, { type: object, properties: { id: { type: string }, camera_id: { type: string } } }] }
+    Incident:
+      type: object
+      properties:
+        id: { type: string }
+        camera_id: { type: string }
+        camera_name: { type: string }
+        rule_name: { type: string }
+        rule_type: { $ref: "#/components/schemas/RuleType" }
+        severity: { $ref: "#/components/schemas/Severity" }
+        status: { type: string }
+        occurred_at: { type: string, format: date-time }
+        message: { type: string }
+        description: { type: string, nullable: true }
+        description_provider: { type: string, nullable: true }
+        snapshot_url: { type: string, nullable: true }
+        clip_url: { type: string, nullable: true }
+    Model:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        backend: { type: string, enum: [color, motion, pytorch, onnx] }
+        classes: { type: array, items: { type: string } }
+        available: { type: boolean }
+        map50: { type: number, nullable: true }
+        map50_95: { type: number, nullable: true }
+        latency_ms: { type: number, nullable: true }
+        fps: { type: number, nullable: true }
+        active: { type: boolean }

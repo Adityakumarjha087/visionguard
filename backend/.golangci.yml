@@ -1,0 +1,18 @@
+version: "2"
+linters:
+  enable: [bodyclose, errorlint, gosec, misspell, revive, unconvert, prealloc]
+  settings:
+    gosec:
+      excludes: [G104, G115, G202, G304]
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, bodyclose, errcheck, prealloc]
+formatters:
+  enable: [gofmt, goimports]

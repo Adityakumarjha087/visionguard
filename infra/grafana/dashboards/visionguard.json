@@ -1,0 +1,549 @@
+{
+  "uid": "visionguard-overview",
+  "title": "VisionGuard \u2013 System Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "tags": [
+    "visionguard"
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Pipelines running",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_pipelines_running",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Avg FPS",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg(vg_inference_fps)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "p95 frame latency",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(vg_inference_stage_seconds_bucket{stage=\"total\"}[1m])) by (le))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Inference CPU %",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_process_cpu_percent",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Alerts (1h)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(vg_alerts_total[1h]))",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "WS clients",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_ws_clients",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "FPS per camera",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_inference_fps",
+          "legendFormat": "{{camera}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Stage latency p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum(rate(vg_inference_stage_seconds_bucket[1m])) by (le, stage))",
+          "legendFormat": "{{stage}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "CPU usage",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_process_cpu_percent",
+          "legendFormat": "inference process (% of 1 core)",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "vg_system_cpu_percent",
+          "legendFormat": "system",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "GPU utilisation (NaN without NVIDIA GPU)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_gpu_utilization_percent",
+          "legendFormat": "gpu {{gpu}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Memory (RSS)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vg_process_memory_bytes",
+          "legendFormat": "inference",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Detections / s by class",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(vg_detections_total[1m])) by (cls)",
+          "legendFormat": "{{cls}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Alerts by rule type",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(vg_alerts_total[5m])) by (rule_type)",
+          "legendFormat": "{{rule_type}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "API request rate / p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(vg_http_requests_total[1m])) by (status)",
+          "legendFormat": "{{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum(rate(vg_http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p95 s",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Events ingested / s",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(vg_events_ingested_total[1m])) by (type)",
+          "legendFormat": "{{type}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Vision-LLM requests",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "vg-prometheus"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 36,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(vg_llm_requests_total[5m])) by (provider, status)",
+          "legendFormat": "{{provider}} {{status}}",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "vg-prometheus"
+          }
+        }
+      ]
+    }
+  ],
+  "templating": {
+    "list": []
+  }
+}

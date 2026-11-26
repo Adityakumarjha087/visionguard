@@ -152,7 +152,7 @@ func seedStreet(ctx context.Context, st *store.Store) (seeded, error) {
 
 // seedHistory writes plausible time-series for the last `span` (business-hours shaped).
 func seedHistory(ctx context.Context, st *store.Store, wh, street seeded, span time.Duration) error {
-	rng := rand.New(rand.NewPCG(42, 7))
+	rng := rand.New(rand.NewPCG(42, 7)) //nolint:gosec // deterministic demo data, not security sensitive
 	now := time.Now().UTC().Truncate(time.Second)
 	start := now.Add(-span)
 	for _, cam := range []seeded{wh, street} {
@@ -203,8 +203,8 @@ func seedHistory(ctx context.Context, st *store.Store, wh, street seeded, span t
 	}
 	type demo struct {
 		rule, msg, cls, desc string
-		ago             time.Duration
-		status          string
+		ago                  time.Duration
+		status               string
 	}
 	incidents := []demo{
 		{"Person in restricted area", "person #12 entered restricted zone 'Restricted area'", "person",

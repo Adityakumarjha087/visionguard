@@ -11,28 +11,28 @@ import (
 
 // Config is the full runtime configuration of the API service.
 type Config struct {
-	Env             string
-	Port            int
-	DatabaseURL     string
-	RedisURL        string
-	InferenceURL    string
-	DataDir         string
-	JWTSecret       string
-	JWTIssuer       string
-	AccessTTL       time.Duration
-	RefreshTTL      time.Duration
-	CORSOrigins     []string
-	RateLimitRPS    float64
-	RateLimitBurst  int
-	AuthRateLimit   float64 // requests per minute on /auth/login|register
-	MaxUploadBytes  int64
-	LogLevel        string
-	PublicURL       string
-	SMTP            SMTPConfig
-	Telegram        TelegramConfig
-	ConfigResync    time.Duration
-	ConsumerName    string
-	DefaultModel    string
+	Env            string
+	Port           int
+	DatabaseURL    string
+	RedisURL       string
+	InferenceURL   string
+	DataDir        string
+	JWTSecret      string
+	JWTIssuer      string
+	AccessTTL      time.Duration
+	RefreshTTL     time.Duration
+	CORSOrigins    []string
+	RateLimitRPS   float64
+	RateLimitBurst int
+	AuthRateLimit  float64 // requests per minute on /auth/login|register
+	MaxUploadBytes int64
+	LogLevel       string
+	PublicURL      string
+	SMTP           SMTPConfig
+	Telegram       TelegramConfig
+	ConfigResync   time.Duration
+	ConsumerName   string
+	DefaultModel   string
 }
 
 // SMTPConfig configures optional email notifications (disabled when Host is empty).

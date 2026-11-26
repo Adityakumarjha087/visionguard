@@ -189,7 +189,7 @@ func (s *Server) uploadCamera(c *gin.Context) {
 	}
 	rel := filepath.Join("uploads", uuid.NewString()+ext)
 	dst := filepath.Join(s.Cfg.DataDir, "videos", rel)
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		abort(c, err)
 		return
 	}
@@ -213,13 +213,13 @@ func saveUpload[F io.ReadCloser](open func() (F, error), dst string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	out, err := os.Create(dst)
 	if err != nil {
 		return err
 	}
 	if _, err := io.Copy(out, src); err != nil {
-		out.Close()
+		_ = out.Close()
 		_ = os.Remove(dst)
 		return err
 	}
@@ -296,4 +296,3 @@ func deref[T any](p *T, def T) T {
 	}
 	return *p
 }
-

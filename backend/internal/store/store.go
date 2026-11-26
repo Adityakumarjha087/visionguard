@@ -3,6 +3,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -152,12 +153,22 @@ func (s *Store) RevokeAllRefreshTokens(ctx context.Context, userID string) error
 
 // ---------------------------------------------------------------- settings
 
+// GetSetting JSON-decodes a setting into dest.
 func (s *Store) GetSetting(ctx context.Context, key string, dest any) error {
-	return mapErr(s.pool.QueryRow(ctx, `SELECT value FROM settings WHERE key = $1`, key).Scan(dest))
+	var raw []byte
+	if err := s.pool.QueryRow(ctx, `SELECT value::text FROM settings WHERE key = $1`, key).Scan(&raw); err != nil {
+		return mapErr(err)
+	}
+	return json.Unmarshal(raw, dest)
 }
 
+// SetSetting JSON-encodes and upserts a setting.
 func (s *Store) SetSetting(ctx context.Context, key string, value any) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO settings (key, value) VALUES ($1, $2)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`, key, value)
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	_, err = s.pool.Exec(ctx, `INSERT INTO settings (key, value) VALUES ($1, $2)
+		ON CONFLICT (key) DO UPDATE SET value = excluded.value, updated_at = now()`, key, string(raw))
 	return err
 }

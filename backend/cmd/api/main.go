@@ -82,7 +82,7 @@ func run(ctx context.Context, cmd string, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	defer b.R.Close()
+	defer func() { _ = b.R.Close() }()
 	issuer := auth.NewIssuer(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTTL, cfg.RefreshTTL)
 	hub := ws.NewHub(cfg.CORSOrigins)
 	syncer := &ingest.Syncer{Store: st, Bus: b, DefaultModel: cfg.DefaultModel}
