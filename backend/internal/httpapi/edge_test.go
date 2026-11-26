@@ -217,7 +217,10 @@ func TestRedisRestartConsumerRecoversAndConfigResyncs(t *testing.T) {
 		add()
 		return countRows() > before
 	}, 10*time.Second, 200*time.Millisecond)
-	pending, err := e.bus.R.XPending(ctx, bus.EventsStream, bus.ConsumerGroup).Result()
-	require.NoError(t, err)
-	assert.LessOrEqual(t, pending.Count, int64(1)) // nothing stuck
+	// Nothing stays stuck: every delivered entry is eventually acknowledged. (Checking a
+	// snapshot would race with entries that are mid-handler.)
+	require.Eventually(t, func() bool {
+		pending, err := e.bus.R.XPending(ctx, bus.EventsStream, bus.ConsumerGroup).Result()
+		return err == nil && pending.Count == 0
+	}, 10*time.Second, 50*time.Millisecond)
 }
