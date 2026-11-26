@@ -104,6 +104,7 @@ class OnnxYoloDetector:
         iou_thresh: float = 0.5,
         keep_classes: set[str] | None = None,
         threads: int = 2,
+        providers: list[str] | None = None,
     ) -> None:
         if not path.exists():
             raise DetectorUnavailableError(f"ONNX weights not found at {path}")
@@ -112,7 +113,7 @@ class OnnxYoloDetector:
         opts = ort.SessionOptions()
         opts.intra_op_num_threads = threads
         opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-        self.session = ort.InferenceSession(str(path), opts, providers=ort.get_available_providers())
+        self.session = ort.InferenceSession(str(path), opts, providers=providers or ["CPUExecutionProvider"])
         inp = self.session.get_inputs()[0]
         self.input_name: str = inp.name
         shape = inp.shape

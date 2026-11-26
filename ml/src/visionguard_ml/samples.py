@@ -168,6 +168,35 @@ class SceneRenderer:
                 _draw_person(img, pos[0], pos[1], actor.helmet)
         return img
 
+    def ground_truth(self, t: float) -> list[tuple[str, tuple[float, float, float, float]]]:
+        """Exact boxes (class, xyxy px, clipped to frame) for evaluation and PPE dataset labels.
+
+        Classes: ``person``, ``car``, ``helmet`` and ``no_helmet`` (bare head).
+        """
+        out: list[tuple[str, tuple[float, float, float, float]]] = []
+        for a in self.scene.actors:
+            pos = a.position(t)
+            if pos is None:
+                continue
+            x, y = pos
+            if a.kind == "vehicle":
+                box = (x - CAR_W / 2, y - CAR_H, x + CAR_W / 2, y)
+                cls = "car"
+            else:
+                top = y - BODY_H - 2 * HEAD_R - 1
+                box = (x - BODY_W / 2, top, x + BODY_W / 2, y)
+                cls = "person"
+            clipped = (max(0.0, box[0]), max(0.0, box[1]), min(float(WIDTH), box[2]), min(float(HEIGHT), box[3]))
+            if clipped[2] - clipped[0] < 4 or clipped[3] - clipped[1] < 4:
+                continue
+            out.append((cls, clipped))
+            if a.kind == "person":
+                hx, hy = x, y - BODY_H - HEAD_R - 1
+                r = HEAD_R + 2 if a.helmet else HEAD_R
+                head = (hx - r, hy - r - 1, hx + r, hy + (0 if a.helmet else r))
+                out.append(("helmet" if a.helmet else "no_helmet", head))
+        return out
+
     def visible(self, t: float, kind: str) -> int:
         n = 0
         for a in self.scene.actors:

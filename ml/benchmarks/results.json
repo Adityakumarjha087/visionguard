@@ -1,0 +1,61 @@
+{
+  "generated_at": "2026-11-26T06:40:54.444449+00:00",
+  "machine": {
+    "platform": "macOS-27.2.1-arm64-arm-64bit",
+    "processor": "arm",
+    "cpu_count": 10,
+    "threads": 4,
+    "python": "3.12.14"
+  },
+  "iterations": 100,
+  "frames": [
+    "640x853",
+    "640x360",
+    "640x360",
+    "640x360",
+    "640x360"
+  ],
+  "pipeline_color_track_rules": {
+    "latency_ms": 5.76,
+    "fps": 173.6
+  },
+  "models": {
+    "color-synthetic": {
+      "latency_ms": 6.66,
+      "p50_ms": 4.64,
+      "p95_ms": 13.58,
+      "fps": 150.2,
+      "map50": 98.2,
+      "map50_95": 87.4,
+      "source": "measured (synthetic val split)"
+    },
+    "motion-mog2": {
+      "latency_ms": 4.55,
+      "p50_ms": 3.28,
+      "p95_ms": 8.12,
+      "fps": 219.7,
+      "source": "measured"
+    },
+    "yolo11n": {
+      "latency_ms": 166.63,
+      "p50_ms": 127.86,
+      "p95_ms": 402.5,
+      "fps": 6.0,
+      "map50": null,
+      "map50_95": 39.5,
+      "source": "latency measured; mAP published (COCO val2017)"
+    },
+    "yolo11n-onnx": {
+      "latency_ms": 56.79,
+      "p50_ms": 52.28,
+      "p95_ms": 91.35,
+      "fps": 17.6,
+      "map50": null,
+      "map50_95": 39.5,
+      "source": "latency measured; mAP published (COCO val2017)"
+    }
+  },
+  "notes": [
+    "ONNX Runtime speed-up over PyTorch: 2.93x"
+  ]
+}
