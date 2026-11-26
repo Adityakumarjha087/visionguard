@@ -27,11 +27,11 @@ func TestZoneGeometryEdgeCases(t *testing.T) {
 		"duplicate points": {"name": "z", "kind": "polygon", "points": [][]float64{{0.1, 0.1}, {0.1, 0.1}, {0.1, 0.1}}},
 		"self-intersecting bowtie": {"name": "z", "kind": "polygon",
 			"points": [][]float64{{0, 0}, {1, 1}, {1, 0}, {0, 1}}},
-		"off-frame":       {"name": "z", "kind": "polygon", "points": [][]float64{{0.5, 0.5}, {1.4, 0.5}, {0.5, 1.2}}},
-		"negative":        {"name": "z", "kind": "polygon", "points": [][]float64{{-0.1, 0}, {0.5, 0}, {0.5, 0.5}}},
+		"off-frame":        {"name": "z", "kind": "polygon", "points": [][]float64{{0.5, 0.5}, {1.4, 0.5}, {0.5, 1.2}}},
+		"negative":         {"name": "z", "kind": "polygon", "points": [][]float64{{-0.1, 0}, {0.5, 0}, {0.5, 0.5}}},
 		"zero-length line": {"name": "z", "kind": "line", "points": [][]float64{{0.3, 0.3}, {0.3, 0.3}}},
 		"too many points":  {"name": "z", "kind": "polygon", "points": make([][]float64, 65)},
-		"missing name":      {"kind": "polygon", "points": [][]float64{{0, 0}, {1, 0}, {1, 1}}},
+		"missing name":     {"kind": "polygon", "points": [][]float64{{0, 0}, {1, 0}, {1, 1}}},
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) { e.do(http.MethodPost, path, op, body, http.StatusUnprocessableEntity, nil) })
