@@ -182,11 +182,53 @@ make e2e             # Playwright against the running stack
 
 ## PyTorch vs ONNX Runtime CPU benchmark
 
-BENCHMARK_TABLE
+Measured with `scripts/benchmark.py` on the dev machine: Apple Silicon, 10 cores, macOS, 4
+inference threads, 150 iterations after 10 warm-up runs, on two real photos plus three synthetic
+frames, 640 px wide, letterboxed to 640×640. Detection latency only (decode + NMS included,
+tracking excluded). **Caveat:** the host was shared with several other heavy workloads (load
+average 14–25), so absolute numbers are pessimistic. Two back-to-back runs agreed within about
+15%. Raw output is in [`ml/benchmarks/results.json`](ml/benchmarks/results.json).
+
+| Model / runtime | mean ms | p50 ms | p95 ms | FPS | mAP50-95 |
+|---|---|---|---|---|---|
+| YOLO11n, PyTorch 2.15 (Ultralytics, CPU) | 34.3 | 31.6 | 53.1 | 29.2 | 39.5 (published, COCO) |
+| YOLO11n, ONNX Runtime 1.32 CPU EP | 46.3 | 44.6 | 56.9 | 21.6 | 39.5 (published, COCO) |
+| YOLO11n, ONNX Runtime 1.32 CoreML EP (macOS only) | **22.3** | 20.4 | 31.3 | **44.8** | n/a |
+| colour-synthetic (demo detector) | 7.4 | 5.4 | 12.7 | 134.8 | **87.4** (measured; mAP50 98.2, synthetic val split) |
+| MOG2 motion | 5.1 | 3.9 | 8.3 | 196.4 | n/a |
+| Full colour detect → ByteTrack → rules pipeline | 5.9 | | | 170.4 | |
+
+What this means:
+
+* On this ARM CPU, **PyTorch beat ONNX Runtime's default CPU execution provider by about
+  1.35×**. PyTorch's ARM kernels are well tuned, and the ONNX graph ran with stock settings,
+  without quantisation or graph tuning.
+* With the CoreML execution provider, the same ONNX file is **1.54× faster than PyTorch**
+  (22.3 ms vs 34.3 ms). The real win of exporting to ONNX is that one artifact runs on CPU,
+  CoreML, CUDA or TensorRT without PyTorch installed.
+* An earlier run on a quieter host measured 40.8 ms for PyTorch and 21.5 ms for ONNX. That ONNX
+  run used `get_available_providers()`, which silently picked CoreML, so it is not a CPU-only
+  number. The serving code now pins `CPUExecutionProvider` unless told otherwise.
+* The serving image ships ONNX Runtime CPU only, without PyTorch. Inside the Docker Desktop VM,
+  with both demo cameras on YOLO11n and the host loaded, the live pipeline reached about 3.5–3.8
+  FPS per camera at about 415 ms per frame. The real-time demo therefore runs the colour detector
+  at 10 FPS by default.
 
 ## Measured performance (live stack)
 
-LIVE_TABLE
+Measured from the running `docker compose` stack by `scripts/smoke.sh` and Prometheus (two
+demo cameras, colour detector, 10 FPS target, privacy blur on):
+
+| Metric | Value |
+|---|---|
+| Live FPS per camera (WebSocket frame timestamps, 5 s window) | 9.6–10.0 (target 10) |
+| Per-frame processing latency (detect + track + rules), mean over WS frames | 9.0–29.1 ms across runs |
+| Median per-frame latency (Prometheus p50, total stage) | 8.7 ms |
+| Alerts fired in one 60 s video loop (warehouse) | intrusion, missing helmet, dwell (> 20 s), crowd (> 4); 5–13 live incidents per run |
+| Time from rule firing to clip + AI description in DB | < 10 s (4 s post-roll + encode) |
+| API p95 request latency | 82 ms |
+| Smoke test | 44/44 checks passed (two consecutive runs) |
+| Playwright e2e | 2/2 passed (two consecutive runs) |
 
 ## Deployment guide
 
@@ -217,8 +259,9 @@ The full list is in [`docs/DECISIONS.md`](docs/DECISIONS.md). Highlights:
 * **Two delivery guarantees on one bus.** Durable events use a Redis Streams consumer group with
   `XACK` and idempotent `ON CONFLICT` writes (the producer generates incident IDs). Live frames
   use a capped stream tailed from `$`, because a late bounding box is worthless.
-* **ONNX Runtime over PyTorch for serving.** It is faster on CPU (see the benchmark), and
-  dropping PyTorch keeps the image small. The NMS and letterbox post-processing are written in
+* **ONNX for portable serving, measured honestly.** ONNX Runtime's default CPU provider was
+  slower than PyTorch on Apple Silicon, while the CoreML provider was 1.54× faster. The serving
+  image stays PyTorch-free, and the GPU profile swaps in `onnxruntime-gpu`. The NMS and letterbox post-processing are written in
   numpy and unit tested.
 * **Own ByteTrack.** It uses a Kalman filter and two-stage association that recovers occluded
   objects from low-confidence detections. Matching is class-aware, and it is tested against ID

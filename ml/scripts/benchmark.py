@@ -110,6 +110,7 @@ def main() -> None:
 
     frames = _frames()
     results: dict[str, dict[str, Any]] = {}
+    extra: dict[str, dict[str, Any]] = {}  # not selectable in the app; informational only
     notes: list[str] = []
 
     results["color-synthetic"] = {
@@ -150,6 +151,17 @@ def main() -> None:
             **YOLO11N_PUBLISHED,
             "source": "latency measured; mAP published (COCO val2017)",
         }
+        import onnxruntime as ort
+
+        if "CoreMLExecutionProvider" in ort.get_available_providers():
+            coreml = OnnxYoloDetector(
+                onnx_path,
+                "yolo11n-onnx",
+                keep_classes=set(COCO_KEEP),
+                threads=args.threads,
+                providers=["CoreMLExecutionProvider", "CPUExecutionProvider"],
+            )
+            extra["yolo11n-onnx (CoreML EP, macOS only)"] = time_fn(coreml.detect, frames, args.iters)
     else:
         notes.append("yolo11n.onnx missing: ONNX benchmark skipped")
 
@@ -179,6 +191,7 @@ def main() -> None:
         "frames": [f"{f.shape[1]}x{f.shape[0]}" for f in frames],
         "pipeline_color_track_rules": pipeline_throughput(300),
         "models": results,
+        "extra": extra,
         "notes": notes,
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
