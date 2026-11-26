@@ -183,28 +183,29 @@ make e2e             # Playwright against the running stack
 ## PyTorch vs ONNX Runtime CPU benchmark
 
 Measured with `scripts/benchmark.py` on the dev machine: Apple Silicon, 10 cores, macOS, 4
-inference threads, 150 iterations after 10 warm-up runs, on two real photos plus three synthetic
+inference threads, 100 iterations after 10 warm-up runs, on two real photos plus three synthetic
 frames, 640 px wide, letterboxed to 640×640. Detection latency only (decode + NMS included,
-tracking excluded). **Caveat:** the host was shared with several other heavy workloads (load
-average 14–25), so absolute numbers are pessimistic. Two back-to-back runs agreed within about
-15%. Raw output is in [`ml/benchmarks/results.json`](ml/benchmarks/results.json).
+tracking excluded). The host was shared with other workloads (load average about 7 for this
+run). Repeat runs at higher load were about 20–35% slower in absolute terms, and the ranking
+never changed. Raw output is in [`ml/benchmarks/results.json`](ml/benchmarks/results.json).
 
-| Model / runtime | mean ms | p50 ms | p95 ms | FPS | mAP50-95 |
+| Model / runtime | mean ms | p50 ms | p95 ms | FPS | mAP |
 |---|---|---|---|---|---|
-| YOLO11n, PyTorch 2.15 (Ultralytics, CPU) | 34.3 | 31.6 | 53.1 | 29.2 | 39.5 (published, COCO) |
-| YOLO11n, ONNX Runtime 1.32 CPU EP | 46.3 | 44.6 | 56.9 | 21.6 | 39.5 (published, COCO) |
-| YOLO11n, ONNX Runtime 1.32 CoreML EP (macOS only) | **22.3** | 20.4 | 31.3 | **44.8** | n/a |
-| colour-synthetic (demo detector) | 7.4 | 5.4 | 12.7 | 134.8 | **87.4** (measured; mAP50 98.2, synthetic val split) |
-| MOG2 motion | 5.1 | 3.9 | 8.3 | 196.4 | n/a |
-| Full colour detect → ByteTrack → rules pipeline | 5.9 | | | 170.4 | |
+| YOLO11n, PyTorch 2.15 (Ultralytics, CPU) | 28.2 | 26.6 | 33.0 | 35.5 | 39.5 mAP50-95 (published, COCO val2017) |
+| YOLO11n, ONNX Runtime 1.32, CPU EP | 38.4 | 37.8 | 42.0 | 26.1 | same weights |
+| YOLO11n, ONNX Runtime 1.32, CoreML EP (macOS only) | **18.9** | 18.7 | 20.0 | **52.8** | same weights |
+| YOLO11n fine-tuned PPE, ONNX @320 (5 epochs, `scripts/train_ppe.py`) | 10.8 | 10.7 | 11.6 | 92.5 | 96.1 mAP50 / 63.2 mAP50-95 (measured, synthetic val) |
+| colour-synthetic (demo detector) | 6.5 | | | 153.7 | 98.2 mAP50 / 87.4 mAP50-95 (measured, synthetic val) |
+| MOG2 motion | 4.9 | | | 203.8 | n/a |
+| Full colour detect → ByteTrack → rules pipeline | 5.4 | | | 184.2 | |
 
 What this means:
 
 * On this ARM CPU, **PyTorch beat ONNX Runtime's default CPU execution provider by about
-  1.35×**. PyTorch's ARM kernels are well tuned, and the ONNX graph ran with stock settings,
+  1.36×**. PyTorch's ARM kernels are well tuned, and the ONNX graph ran with stock settings,
   without quantisation or graph tuning.
-* With the CoreML execution provider, the same ONNX file is **1.54× faster than PyTorch**
-  (22.3 ms vs 34.3 ms). The real win of exporting to ONNX is that one artifact runs on CPU,
+* With the CoreML execution provider, the same ONNX file is **1.49× faster than PyTorch**
+  (18.9 ms vs 28.2 ms). The real win of exporting to ONNX is that one artifact runs on CPU,
   CoreML, CUDA or TensorRT without PyTorch installed.
 * An earlier run on a quieter host measured 40.8 ms for PyTorch and 21.5 ms for ONNX. That ONNX
   run used `get_available_providers()`, which silently picked CoreML, so it is not a CPU-only
@@ -260,7 +261,7 @@ The full list is in [`docs/DECISIONS.md`](docs/DECISIONS.md). Highlights:
   `XACK` and idempotent `ON CONFLICT` writes (the producer generates incident IDs). Live frames
   use a capped stream tailed from `$`, because a late bounding box is worthless.
 * **ONNX for portable serving, measured honestly.** ONNX Runtime's default CPU provider was
-  slower than PyTorch on Apple Silicon, while the CoreML provider was 1.54× faster. The serving
+  slower than PyTorch on Apple Silicon, while the CoreML provider was 1.49× faster. The serving
   image stays PyTorch-free, and the GPU profile swaps in `onnxruntime-gpu`. The NMS and letterbox post-processing are written in
   numpy and unit tested.
 * **Own ByteTrack.** It uses a Kalman filter and two-stage association that recovers occluded

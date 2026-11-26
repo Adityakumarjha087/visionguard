@@ -1,0 +1,7 @@
+{
+  "map50": 96.1,
+  "map50_95": 63.2,
+  "epochs": 5,
+  "dataset": "synthetic",
+  "source": "measured (val split, synthetic PPE data)"
+}

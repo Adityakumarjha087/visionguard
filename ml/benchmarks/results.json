@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-26T09:03:41.239195+00:00",
+  "generated_at": "2026-11-26T09:13:56.138792+00:00",
   "machine": {
     "platform": "macOS-27.2.1-arm64-arm-64bit",
     "processor": "arm",
@@ -7,7 +7,7 @@
     "threads": 4,
     "python": "3.12.14"
   },
-  "iterations": 150,
+  "iterations": 100,
   "frames": [
     "640x853",
     "640x360",
@@ -16,54 +16,65 @@
     "640x360"
   ],
   "pipeline_color_track_rules": {
-    "latency_ms": 5.87,
-    "fps": 170.4
+    "latency_ms": 5.43,
+    "fps": 184.2
   },
   "models": {
     "color-synthetic": {
-      "latency_ms": 7.42,
-      "p50_ms": 5.4,
-      "p95_ms": 12.7,
-      "fps": 134.8,
+      "latency_ms": 6.51,
+      "p50_ms": 5.11,
+      "p95_ms": 12.1,
+      "fps": 153.7,
       "map50": 98.2,
       "map50_95": 87.4,
       "source": "measured (synthetic val split)"
     },
     "motion-mog2": {
-      "latency_ms": 5.09,
-      "p50_ms": 3.87,
-      "p95_ms": 8.28,
-      "fps": 196.4,
+      "latency_ms": 4.91,
+      "p50_ms": 3.66,
+      "p95_ms": 8.0,
+      "fps": 203.8,
       "source": "measured"
     },
     "yolo11n": {
-      "latency_ms": 34.29,
-      "p50_ms": 31.63,
-      "p95_ms": 53.12,
-      "fps": 29.2,
+      "latency_ms": 28.15,
+      "p50_ms": 26.59,
+      "p95_ms": 32.96,
+      "fps": 35.5,
       "map50": null,
       "map50_95": 39.5,
       "source": "latency measured; mAP published (COCO val2017)"
     },
     "yolo11n-onnx": {
-      "latency_ms": 46.34,
-      "p50_ms": 44.59,
-      "p95_ms": 56.94,
-      "fps": 21.6,
+      "latency_ms": 38.38,
+      "p50_ms": 37.84,
+      "p95_ms": 41.97,
+      "fps": 26.1,
       "map50": null,
       "map50_95": 39.5,
       "source": "latency measured; mAP published (COCO val2017)"
+    },
+    "ppe-yolo11n-onnx": {
+      "latency_ms": 10.81,
+      "p50_ms": 10.69,
+      "p95_ms": 11.64,
+      "fps": 92.5,
+      "source": "measured (val split, synthetic PPE data)",
+      "map50": 96.1,
+      "map50_95": 63.2,
+      "epochs": 5,
+      "dataset": "synthetic"
     }
   },
   "extra": {
     "yolo11n-onnx (CoreML EP, macOS only)": {
-      "latency_ms": 22.31,
-      "p50_ms": 20.4,
-      "p95_ms": 31.3,
-      "fps": 44.8
+      "latency_ms": 18.93,
+      "p50_ms": 18.72,
+      "p95_ms": 20.03,
+      "fps": 52.8
     }
   },
   "notes": [
-    "ONNX Runtime speed-up over PyTorch: 0.74x"
+    "ONNX Runtime speed-up over PyTorch: 0.73x"
   ]
 }
