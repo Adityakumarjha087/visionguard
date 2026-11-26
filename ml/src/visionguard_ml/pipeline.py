@@ -11,7 +11,9 @@ from concurrent.futures import Executor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
+
+import cv2
 
 from visionguard_ml import metrics as m
 from visionguard_ml.bus import EventBus
@@ -56,6 +58,7 @@ class CameraPipeline:
     """Owns one camera. ``process_frame`` is pure-ish and unit-tested; ``run`` adds I/O."""
 
     STATS_INTERVAL = 1.0
+    MAX_FRAME_WIDTH = 1920  # 4K+ sources are downscaled once; boxes are normalised anyway
     STATUS_INTERVAL = 3.0
 
     def __init__(self, camera: CameraConfig, model_id: str, deps: PipelineDeps) -> None:
@@ -169,6 +172,14 @@ class CameraPipeline:
     def process_frame(self, frame: Frame, ts: float) -> tuple[list[TrackState], list[AlertEvent]]:
         self._apply_pending()
         cam_label = self.camera.id
+        if frame.shape[1] > self.MAX_FRAME_WIDTH:
+            scale = self.MAX_FRAME_WIDTH / frame.shape[1]
+            frame = cast(
+                Frame,
+                cv2.resize(
+                    frame, (self.MAX_FRAME_WIDTH, round(frame.shape[0] * scale)), interpolation=cv2.INTER_AREA
+                ),
+            )
         h, w = frame.shape[:2]
         t0 = time.perf_counter()
         detections = self.detector.detect(frame)

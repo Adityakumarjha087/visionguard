@@ -186,7 +186,12 @@ class SceneRenderer:
                 top = y - BODY_H - 2 * HEAD_R - 1
                 box = (x - BODY_W / 2, top, x + BODY_W / 2, y)
                 cls = "person"
-            clipped = (max(0.0, box[0]), max(0.0, box[1]), min(float(WIDTH), box[2]), min(float(HEIGHT), box[3]))
+            clipped = (
+                max(0.0, box[0]),
+                max(0.0, box[1]),
+                min(float(WIDTH), box[2]),
+                min(float(HEIGHT), box[3]),
+            )
             if clipped[2] - clipped[0] < 4 or clipped[3] - clipped[1] < 4:
                 continue
             out.append((cls, clipped))

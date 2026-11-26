@@ -12,8 +12,8 @@ def point_in_polygon(pt: Point, polygon: Sequence[Point]) -> bool:
     x, y = pt
     inside = False
     n = len(polygon)
-    if n < 3:
-        return False
+    if n < 3 or is_collinear(polygon):
+        return False  # degenerate (collinear / zero-area) zones never match
     j = n - 1
     for i in range(n):
         xi, yi = polygon[i]
@@ -24,6 +24,23 @@ def point_in_polygon(pt: Point, polygon: Sequence[Point]) -> bool:
                 inside = not inside
         j = i
     return inside
+
+
+def polygon_area(polygon: Sequence[Point]) -> float:
+    """Signed shoelace area (self-intersecting shapes may partially cancel)."""
+    n = len(polygon)
+    return 0.5 * sum(
+        polygon[i][0] * polygon[(i + 1) % n][1] - polygon[(i + 1) % n][0] * polygon[i][1] for i in range(n)
+    )
+
+
+def is_collinear(points: Sequence[Point], eps: float = 1e-9) -> bool:
+    """True when all points lie on one line (a zero-area, degenerate polygon)."""
+    base = points[0]
+    far = max(points, key=lambda p: (p[0] - base[0]) ** 2 + (p[1] - base[1]) ** 2)
+    if far == base:
+        return True
+    return all(abs(cross(base, far, p)) < eps for p in points)
 
 
 def cross(o: Point, a: Point, b: Point) -> float:

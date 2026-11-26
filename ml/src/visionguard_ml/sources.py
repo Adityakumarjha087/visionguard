@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 
 import cv2
 
@@ -42,9 +43,16 @@ class FileSource:
     """Plays a file in a loop, sub-sampling frames to approximate ``target_fps``."""
 
     def __init__(self, path: Path, target_fps: float) -> None:
+        if path.stat().st_size == 0:
+            raise SourceError(f"video file is empty: {path.name}")
         self._cap = cv2.VideoCapture(str(path))
         if not self._cap.isOpened():
-            raise SourceError(f"cannot open video file {path}")
+            raise SourceError(f"cannot open video file {path.name} (corrupt or unsupported codec)")
+        ok, _ = self._cap.read()
+        if not ok:
+            self._cap.release()
+            raise SourceError(f"cannot decode video file {path.name} (corrupt or unsupported codec)")
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         src_fps = self._cap.get(cv2.CAP_PROP_FPS) or 25.0
         if src_fps <= 0 or src_fps > 240:
             src_fps = 25.0
@@ -72,10 +80,20 @@ class StreamSource:
     """RTSP / webcam reader. A grabber thread always keeps only the newest frame,
     so slow inference never builds up decoder latency."""
 
-    def __init__(self, uri: str | int, target_fps: float, reconnect_delay: float = 2.0) -> None:
+    def __init__(
+        self,
+        uri: str | int,
+        target_fps: float,
+        reconnect_delay: float = 2.0,
+        read_timeout: float = 5.0,
+        capture_factory: Callable[[str | int], Any] | None = None,
+    ) -> None:
         self.uri = uri
         self.frame_interval = 1.0 / max(target_fps, 0.1)
         self._reconnect_delay = reconnect_delay
+        self._read_timeout = read_timeout
+        self._factory = capture_factory or _default_capture
+        self.reconnects = 0
         self._latest: Frame | None = None
         self._seq = 0
         self._read_seq = 0
@@ -85,10 +103,10 @@ class StreamSource:
         self._thread = threading.Thread(target=self._grab, daemon=True, name=f"grab-{uri}")
         self._thread.start()
 
-    def _open(self) -> cv2.VideoCapture:
-        cap = cv2.VideoCapture(self.uri)
+    def _open(self) -> Any:
+        cap = self._factory(self.uri)
         if not cap.isOpened():
-            raise SourceError(f"cannot open stream {self.uri}")
+            raise SourceError(f"cannot open stream {_redact(self.uri)}")
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         return cap
 
@@ -96,12 +114,13 @@ class StreamSource:
         while not self._stop.is_set():
             ok, frame = self._cap.read()
             if not ok:
-                log.warning("stream read failed; reconnecting", extra={"uri": str(self.uri)})
+                log.warning("stream read failed; reconnecting", extra={"uri": _redact(self.uri)})
                 self._cap.release()
                 if self._stop.wait(self._reconnect_delay):
                     return
                 try:
                     self._cap = self._open()
+                    self.reconnects += 1
                 except SourceError:
                     continue
                 continue
@@ -110,7 +129,7 @@ class StreamSource:
                 self._seq += 1
 
     def read(self) -> Frame | None:
-        deadline = time.monotonic() + 5.0
+        deadline = time.monotonic() + self._read_timeout
         while time.monotonic() < deadline and not self._stop.is_set():
             with self._lock:
                 if self._seq != self._read_seq and self._latest is not None:
@@ -123,6 +142,23 @@ class StreamSource:
         self._stop.set()
         self._thread.join(timeout=2)
         self._cap.release()
+
+
+def _default_capture(uri: str | int) -> Any:
+    """FFmpeg capture with open/read timeouts so dead RTSP endpoints fail fast."""
+    if isinstance(uri, str):
+        params = [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 5000, cv2.CAP_PROP_READ_TIMEOUT_MSEC, 5000]
+        return cv2.VideoCapture(uri, cv2.CAP_FFMPEG, params)
+    return cv2.VideoCapture(uri)
+
+
+def _redact(uri: str | int) -> str:
+    """Hide credentials embedded in RTSP URLs (rtsp://user:pass@host) from logs and status."""
+    text = str(uri)
+    if "@" in text and "://" in text:
+        scheme, rest = text.split("://", 1)
+        return f"{scheme}://***@{rest.rsplit('@', 1)[1]}"
+    return text
 
 
 def open_source(camera: CameraConfig, video_dir: Path) -> FrameSource:

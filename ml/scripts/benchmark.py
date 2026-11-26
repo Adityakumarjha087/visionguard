@@ -56,7 +56,9 @@ def _frames() -> list[Frame]:
     return frames
 
 
-def time_fn(fn: Callable[[Frame], Any], frames: list[Frame], iters: int, warmup: int = 10) -> dict[str, float]:
+def time_fn(
+    fn: Callable[[Frame], Any], frames: list[Frame], iters: int, warmup: int = 10
+) -> dict[str, float]:
     for i in range(warmup):
         fn(frames[i % len(frames)])
     samples = []
@@ -130,16 +132,24 @@ def main() -> None:
             def pt_detect(f: Frame) -> Any:
                 return model.predict(f, imgsz=640, conf=0.35, device="cpu", verbose=False)
 
-            results["yolo11n"] = {**time_fn(pt_detect, frames, args.iters), **YOLO11N_PUBLISHED,
-                                  "source": "latency measured; mAP published (COCO val2017)"}
+            results["yolo11n"] = {
+                **time_fn(pt_detect, frames, args.iters),
+                **YOLO11N_PUBLISHED,
+                "source": "latency measured; mAP published (COCO val2017)",
+            }
         except ImportError:
             notes.append("ultralytics not installed: PyTorch benchmark skipped")
     else:
         notes.append("yolo11n.pt missing: PyTorch benchmark skipped")
     if onnx_path.exists():
-        onnx_det = OnnxYoloDetector(onnx_path, "yolo11n-onnx", keep_classes=set(COCO_KEEP), threads=args.threads)
-        results["yolo11n-onnx"] = {**time_fn(onnx_det.detect, frames, args.iters), **YOLO11N_PUBLISHED,
-                                   "source": "latency measured; mAP published (COCO val2017)"}
+        onnx_det = OnnxYoloDetector(
+            onnx_path, "yolo11n-onnx", keep_classes=set(COCO_KEEP), threads=args.threads
+        )
+        results["yolo11n-onnx"] = {
+            **time_fn(onnx_det.detect, frames, args.iters),
+            **YOLO11N_PUBLISHED,
+            "source": "latency measured; mAP published (COCO val2017)",
+        }
     else:
         notes.append("yolo11n.onnx missing: ONNX benchmark skipped")
 

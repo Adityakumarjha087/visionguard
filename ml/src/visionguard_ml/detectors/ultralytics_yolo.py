@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from visionguard_ml.detectors.base import DetectorUnavailableError
 from visionguard_ml.types import Detection, Frame
@@ -32,7 +33,7 @@ class UltralyticsDetector:
         self.imgsz = imgsz
 
     def detect(self, frame: Frame) -> list[Detection]:
-        result = self.model.predict(
+        result: Any = self.model.predict(
             frame, conf=self.conf_thresh, imgsz=self.imgsz, verbose=False, device="cpu"
         )[0]
         out: list[Detection] = []

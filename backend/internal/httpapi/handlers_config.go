@@ -24,12 +24,19 @@ func (r *zoneReq) validate() *APIError {
 	details := map[string]string{}
 	switch r.Kind {
 	case "polygon":
-		if len(r.Points) < 3 {
+		switch {
+		case len(r.Points) < 3:
 			details["points"] = "a polygon needs at least 3 points"
+		case collinear(r.Points):
+			details["points"] = "polygon is degenerate (zero area)"
+		case selfIntersecting(r.Points):
+			details["points"] = "polygon edges must not cross each other"
 		}
 	case "line":
 		if len(r.Points) != 2 {
 			details["points"] = "a line needs exactly 2 points"
+		} else if r.Points[0] == r.Points[1] {
+			details["points"] = "line endpoints must differ"
 		}
 	}
 	for _, p := range r.Points {
@@ -239,4 +246,47 @@ func (s *Server) deleteRule(c *gin.Context) {
 	}
 	s.syncConfig(c)
 	c.Status(http.StatusNoContent)
+}
+
+func cross(o, a, b domain.Point) float64 {
+	return (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0])
+}
+
+// collinear reports a zero-area polygon (all vertices on one line).
+func collinear(pts []domain.Point) bool {
+	base, far, best := pts[0], pts[0], 0.0
+	for _, p := range pts {
+		if d := (p[0]-base[0])*(p[0]-base[0]) + (p[1]-base[1])*(p[1]-base[1]); d > best {
+			far, best = p, d
+		}
+	}
+	if best == 0 {
+		return true
+	}
+	for _, p := range pts {
+		if c := cross(base, far, p); c > 1e-9 || c < -1e-9 {
+			return false
+		}
+	}
+	return true
+}
+
+// selfIntersecting checks every pair of non-adjacent edges for a proper crossing.
+func selfIntersecting(pts []domain.Point) bool {
+	n := len(pts)
+	for i := 0; i < n; i++ {
+		a0, a1 := pts[i], pts[(i+1)%n]
+		for j := i + 1; j < n; j++ {
+			if j == i || (j+1)%n == i || (i+1)%n == j {
+				continue // adjacent edges share a vertex
+			}
+			b0, b1 := pts[j], pts[(j+1)%n]
+			d1, d2 := cross(b0, b1, a0), cross(b0, b1, a1)
+			d3, d4 := cross(a0, a1, b0), cross(a0, a1, b1)
+			if ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0)) {
+				return true
+			}
+		}
+	}
+	return false
 }

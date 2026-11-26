@@ -1,6 +1,6 @@
 """Download YOLO11n weights (if missing) and export them to ONNX for ONNX Runtime serving.
 
-    uv run --extra yolo python scripts/export_onnx.py [--weights models/yolo11n.pt] [--imgsz 640]
+uv run --extra yolo python scripts/export_onnx.py [--weights models/yolo11n.pt] [--imgsz 640]
 """
 
 from __future__ import annotations

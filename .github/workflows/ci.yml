@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ml:
+    name: Inference service (Python)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: ml } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with: { enable-cache: true }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - run: uv sync -p 3.12 --frozen
+      - run: uv run ruff check src tests && uv run ruff format --check src tests
+      - run: uv run mypy
+      - run: uv run pytest --cov --cov-report=term --cov-fail-under=80
+
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: backend } }
+    services:
+      timescale:
+        image: timescale/timescaledb:latest-pg17
+        env:
+          POSTGRES_USER: visionguard
+          POSTGRES_PASSWORD: visionguard
+          POSTGRES_DB: visionguard
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U visionguard" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      VG_TEST_DATABASE_URL: postgres://visionguard:visionguard@localhost:5432/visionguard?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: backend/go.mod, cache-dependency-path: backend/go.sum }
+      - uses: golangci/golangci-lint-action@v8
+        with: { version: latest, working-directory: backend }
+      - run: go vet ./...
+      - name: Test with coverage
+        run: |
+          PKGS=$(go list ./internal/... | grep -v testutil | paste -sd, -)
+          go test -race -count=1 -coverpkg="$PKGS" -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1
+
+  frontend:
+    name: Frontend (Next.js)
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: frontend } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test:coverage
+      - run: npm run build
+
+  docker:
+    name: Docker images + live smoke + e2e
+    runs-on: ubuntu-latest
+    needs: [ml, api, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/package-lock.json }
+      - name: Build and start the CPU stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+      - name: Smoke test (synthetic sample video)
+        run: TIMEOUT=180 ./scripts/smoke.sh
+      - name: Playwright e2e
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          E2E_BASE_URL=http://localhost:20900 npx playwright test
+      - name: Logs on failure
+        if: failure()
+        run: docker compose logs --tail=200
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

@@ -76,3 +76,8 @@ omit = ["*/ultralytics_yolo.py"]
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+
+# Thin glue over the optional PyTorch extra; type-checked only when that extra is installed.
+[[tool.mypy.overrides]]
+module = ["visionguard_ml.detectors.ultralytics_yolo"]
+ignore_errors = true

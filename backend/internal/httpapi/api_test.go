@@ -53,7 +53,7 @@ type recordingNotifier struct{ got []domain.Incident }
 
 func (r *recordingNotifier) Notify(inc domain.Incident) { r.got = append(r.got, inc) }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...func(*config.Config)) *env {
 	t.Helper()
 	st := testutil.Store(t)
 	testutil.Reset(t, st)
@@ -79,6 +79,9 @@ func newEnv(t *testing.T) *env {
 	cfg := config.Config{
 		Env: "test", DataDir: dataDir, InferenceURL: inference.URL, CORSOrigins: []string{"http://localhost:20900"},
 		RateLimitRPS: 1000, RateLimitBurst: 1000, AuthRateLimit: 6000, MaxUploadBytes: 1 << 20, DefaultModel: "color-synthetic",
+	}
+	for _, o := range opts {
+		o(&cfg)
 	}
 	issuer := auth.NewIssuer("test-secret-with-enough-length", "visionguard", time.Minute, time.Hour)
 	hub := ws.NewHub([]string{"*"})
