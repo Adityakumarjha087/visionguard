@@ -90,12 +90,38 @@ restarting the capture.
 
 ## Screenshots
 
-_Placeholders. Add captures of the dashboard, live view with overlay, zone editor, incidents,
-analytics and Grafana here._
+All screens below show the synthetic demo scenes running live in `docker compose`. Regenerate them
+with `node scripts/screenshots.mjs`.
 
-| Dashboard | Live view + zones | Incident | Analytics | Grafana |
-|---|---|---|---|---|
-| `docs/screenshots/dashboard.png` | `docs/screenshots/live.png` | `docs/screenshots/incident.png` | `docs/screenshots/analytics.png` | `docs/screenshots/grafana.png` |
+**Live view.** The MJPEG stream has a canvas overlay with class labels, track IDs, confidence,
+zones and an FPS/latency counter.
+![Live view with bounding boxes, track IDs and FPS overlay](docs/screenshots/live-view.png)
+
+**Dashboard.** KPIs, live camera tiles and the real-time alert feed with face-blurred snapshots.
+![Dashboard](docs/screenshots/dashboard.png)
+
+**Zone editor.** A new polygon being drawn on a still frame, next to the existing zones and
+counting line.
+![Zone editor](docs/screenshots/zone-editor.png)
+
+**Incident detail.** The face-blurred snapshot with offenders outlined in red, the event clip and
+the AI-written description.
+![Incident detail](docs/screenshots/incident-detail.png)
+
+**Analytics.** People and vehicle counts over time, the movement heatmap and line-crossing counts
+in/out.
+![Analytics](docs/screenshots/analytics.png)
+
+**Model management.** The detector catalogue with measured latency/FPS, mAP, and switching the
+live model.
+![Model management](docs/screenshots/models.png)
+
+**Dark mode.** The live view in dark mode.
+![Live view, dark mode](docs/screenshots/live-view-dark.png)
+
+**Grafana.** System metrics: FPS per camera, per-stage latency, CPU and memory, and GPU when
+present.
+![Grafana dashboard](docs/screenshots/grafana.png)
 
 ## Local setup
 
