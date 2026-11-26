@@ -57,8 +57,8 @@ export default function ModelsPage() {
                 <TableHead>Model</TableHead>
                 <TableHead>Backend</TableHead>
                 <TableHead>Classes</TableHead>
-                <TableHead className="text-right">mAP50</TableHead>
-                <TableHead className="text-right">mAP50-95</TableHead>
+                <TableHead className="text-right">mAP50 %</TableHead>
+                <TableHead className="text-right">mAP50-95 %</TableHead>
                 <TableHead className="text-right">Latency</TableHead>
                 <TableHead className="text-right">FPS</TableHead>
                 <TableHead>Available</TableHead>
@@ -85,8 +85,8 @@ export default function ModelsPage() {
                       {m.classes.join(", ") || "—"}
                     </p>
                   </TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(m.map50)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{fmt(m.map50_95)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(m.map50, 1)}</TableCell>
+                  <TableCell className="text-right font-mono tabular-nums">{fmt(m.map50_95, 1)}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{m.latency_ms === null ? "—" : `${fmt(m.latency_ms, 1)} ms`}</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{fmt(m.fps, 1)}</TableCell>
                   <TableCell>

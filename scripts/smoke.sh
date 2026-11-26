@@ -147,6 +147,8 @@ for _ in $(seq 1 30); do
   [[ $got -ge 1 ]] && break; sleep 2
 done
 check "new rule fired live within 60s ($got incidents)" '[[ $got -ge 1 ]]'
+r=$(api DELETE "/api/v1/zones/$ZONE" "$OP")  # cleanup: deleting the zone cascades to its rule
+check "smoke zone and rule cleaned up" '[[ $(code "$r") == 204 ]]'
 
 step "Upload a video as a new camera"
 tmpv=$(mktemp -t vgclip.XXXX).mp4
