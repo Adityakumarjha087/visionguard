@@ -111,8 +111,8 @@ for w in $want; do check "rule type '$w' fired" '[[ " $have " == *" $w "* ]]'; d
 LIVE=$(jq '[.items[] | select(.snapshot_url != null)]' <<<"$INC")
 N_ALERTS=$(jq length <<<"$LIVE")
 check "live incidents with snapshots: $N_ALERTS" '[[ $N_ALERTS -ge 4 ]]'
-FIRST=$(jq -r '.[-1].id' <<<"$LIVE")
-for _ in $(seq 1 20); do
+FIRST=$(jq -r '.[0].id' <<<"$LIVE")  # newest live incident; clip + description arrive asynchronously
+for _ in $(seq 1 30); do
   DETAIL=$(json "$(api GET "/api/v1/incidents/$FIRST" "$VIEWER")")
   [[ $(jq -r '.clip_url // empty' <<<"$DETAIL") != "" && $(jq -r '.description // empty' <<<"$DETAIL") != "" ]] && break
   sleep 2
@@ -120,7 +120,7 @@ done
 check "AI description: $(jq -r '.description_provider' <<<"$DETAIL") — \"$(jq -r '.description' <<<"$DETAIL" | cut -c1-80)...\"" '[[ -n $(jq -r ".description // empty" <<<"$DETAIL") ]]'
 SNAP_URL=$(jq -r .snapshot_url <<<"$DETAIL"); CLIP_URL=$(jq -r .clip_url <<<"$DETAIL")
 check "snapshot downloadable" '[[ $(curl -s -o /dev/null -w "%{http_code}" "$API$SNAP_URL?access_token=$VIEWER") == 200 ]]'
-clip_type=$(curl -s -o /dev/null -w '%{content_type}' "$API$CLIP_URL?access_token=$VIEWER")
+clip_type=$(curl -s -o /dev/null -w '%{content_type}' "$API$CLIP_URL?access_token=$VIEWER" || true)
 check "event clip downloadable ($clip_type)" '[[ $clip_type == video/mp4 ]]'
 # Cooldown/de-dup: intrusion fires at most once per 20 s cooldown window per loop.
 intr=$(jq '[.[] | select(.rule_type=="zone_intrusion")] | length' <<<"$LIVE")
