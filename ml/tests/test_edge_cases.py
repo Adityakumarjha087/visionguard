@@ -360,3 +360,63 @@ def test_bus_restart_keeps_pipelines_and_resumes(
         assert redis_client.xlen("vg:frames") > 0  # publishing resumed on the fresh Redis
     finally:
         mgr.stop()
+
+
+def test_frame_exception_does_not_kill_pipeline(bus: EventBus, settings: Settings) -> None:
+    """Regression: an exception while handling one frame used to end the capture thread."""
+
+    class _Boom:
+        model_id = "boom"
+        classes = ("person",)
+        calls = 0
+
+        def detect(self, frame: Any) -> list[Detection]:
+            _Boom.calls += 1
+            if _Boom.calls == 2:
+                raise RuntimeError("transient detector failure")
+            return []
+
+    class _Src:
+        frame_interval = 0.01
+
+        def read(self) -> np.ndarray:
+            return np.zeros((36, 64, 3), np.uint8)
+
+        def close(self) -> None: ...
+
+    deps = _deps(bus, settings)
+    deps.detector_factory = lambda _m: _Boom()
+    pipe = CameraPipeline(CameraConfig("b", "Boom", "file", "x"), "boom", deps)
+    import threading
+
+    t = threading.Thread(target=pipe._loop, args=(_Src(),), daemon=True)
+    t.start()
+    deadline = time.time() + 20
+    while pipe.frame_idx < 5 and time.time() < deadline:
+        time.sleep(0.02)
+    pipe._stop.set()
+    t.join(2)
+    assert pipe.frame_idx >= 5
+
+
+def test_alert_logging_uses_safe_extra_keys(
+    caplog: pytest.LogCaptureFixture, bus: EventBus, settings: Settings
+) -> None:
+    """Regression: logging an alert with a reserved LogRecord key ('msg') raised KeyError."""
+    from visionguard_ml.logging_setup import JsonFormatter
+
+    zone = Zone("z", "All", "polygon", ((0, 0), (1, 0), (1, 1), (0, 1)))
+    cam = CameraConfig(
+        "l",
+        "L",
+        "file",
+        "x",
+        zones=(zone,),
+        rules=(Rule("r", "R", "zone_intrusion", "z", cooldown_seconds=0),),
+    )
+    pipe = CameraPipeline(cam, "color-synthetic", _deps(bus, settings))
+    with caplog.at_level("INFO"):
+        _, alerts = pipe.process_frame(SceneRenderer(WAREHOUSE).render(12.0), 1.0)
+    assert alerts
+    record = next(r for r in caplog.records if r.getMessage() == "alert raised")
+    assert json.loads(JsonFormatter().format(record))["detail"]

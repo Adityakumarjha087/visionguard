@@ -160,7 +160,12 @@ class CameraPipeline:
                     return
                 continue
             failures = 0
-            self.process_frame(frame, time.time())
+            try:
+                self.process_frame(frame, time.time())
+            except Exception:
+                # One bad frame (or a bug in a downstream step) must never kill the camera.
+                m.FRAME_ERRORS.labels(self.camera.id).inc()
+                log.exception("frame processing failed", extra={"camera": self.camera.id})
             next_tick += source.frame_interval
             delay = next_tick - time.monotonic()
             if delay > 0:
@@ -313,7 +318,7 @@ class CameraPipeline:
             },
         )
         log.info(
-            "alert raised", extra={"camera": self.camera.id, "rule": alert.rule_name, "msg": alert.message}
+            "alert raised", extra={"camera": self.camera.id, "rule": alert.rule_name, "detail": alert.message}
         )
 
         privacy, cam_zones = self._privacy, zones

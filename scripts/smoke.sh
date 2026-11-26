@@ -37,7 +37,10 @@ code() { tail -n1 <<<"$1"; }
 json() { sed '$d' <<<"$1"; }
 
 login() {
-  json "$(api POST /api/v1/auth/login '' "{\"email\":\"$1\",\"password\":\"$2\"}")" | jq -r .access_token
+  local body resp
+  body=$(jq -cn --arg e "$1" --arg p "$2" '{email: $e, password: $p}')
+  resp=$(api POST /api/v1/auth/login '' "$body")
+  json "$resp" | jq -r .access_token
 }
 
 step "Health"
@@ -74,7 +77,7 @@ done
 check "warehouse camera online (fps=$fps)" '[[ $state == online ]]'
 snap_bytes=$(curl -fsS "$API/api/v1/cameras/$WH/snapshot?access_token=$VIEWER" | wc -c | tr -d ' ')
 check "live snapshot JPEG ($snap_bytes bytes)" '[[ $snap_bytes -gt 5000 ]]'
-mjpeg=$(curl -sS --max-time 2 "$API/api/v1/cameras/$WH/stream?access_token=$VIEWER" 2>/dev/null | head -c 200 | tr -d '\0' | grep -c 'image/jpeg' || true)
+mjpeg=$(curl -sS --max-time 2 "$API/api/v1/cameras/$WH/stream?access_token=$VIEWER" 2>/dev/null | LC_ALL=C tr -d "\\000" | LC_ALL=C grep -a -c 'image/jpeg' || true)
 check "MJPEG stream delivers frames" '[[ $mjpeg -ge 1 ]]'
 
 WS_URL="${API/http/ws}/api/v1/ws?access_token=$VIEWER"
@@ -135,7 +138,8 @@ check "self-intersecting polygon rejected (422)" '[[ $(code "$r") == 422 ]]'
 r=$(api POST "/api/v1/cameras/$ST/zones" "$OP" '{"name":"Whole street","kind":"polygon","points":[[0,0],[1,0],[1,1],[0,1]],"color":"#a855f7"}')
 ZONE=$(json "$r" | jq -r .id)
 check "polygon zone created" '[[ $(code "$r") == 201 ]]'
-r=$(api POST "/api/v1/cameras/$ST/rules" "$OP" "{\"name\":\"Smoke crowd\",\"type\":\"crowd_count\",\"zone_id\":\"$ZONE\",\"params\":{\"max_count\":0,\"classes\":[\"car\"],\"cooldown_seconds\":5},\"severity\":\"low\"}")
+body=$(jq -cn --arg z "$ZONE" '{name: "Smoke crowd", type: "crowd_count", zone_id: $z, params: {max_count: 0, classes: ["car"], cooldown_seconds: 5}, severity: "low"}')
+r=$(api POST "/api/v1/cameras/$ST/rules" "$OP" "$body")
 check "crowd rule created" '[[ $(code "$r") == 201 ]]'
 got=0
 for _ in $(seq 1 30); do
