@@ -1,0 +1,78 @@
+[project]
+name = "visionguard-ml"
+version = "0.1.0"
+description = "VisionGuard inference service: detection, ByteTrack tracking, zone rules, privacy blur and vision-LLM incident descriptions"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "anthropic>=2.14",
+    "fastapi>=0.115",
+    "httpx2>=2.16",
+    "numpy>=2.0",
+    "onnxruntime>=1.20",
+    "openai>=3.59",
+    "opencv-python-headless>=4.10",
+    "prometheus-client>=0.21",
+    "psutil>=6.0",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "redis>=5.2",
+    "scipy>=1.14",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.optional-dependencies]
+# Real Ultralytics backend + ONNX export + fine-tuning. Heavy (PyTorch); not needed for tests.
+yolo = ["ultralytics>=8.3", "onnx>=1.17", "onnxslim>=0.1.40"]
+
+[project.scripts]
+visionguard-inference = "visionguard_ml.app:main"
+visionguard-samples = "visionguard_ml.samples:main"
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.26",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+    "types-psutil>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/visionguard_ml"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "PL"]
+ignore = ["PLR0913", "PLR0917", "PLR2004", "PLR0911", "PLR0912", "PLR0915", "PLC0415"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["cv2.*", "scipy.*", "onnxruntime.*", "ultralytics.*", "fakeredis.*", "pynvml.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["real_model: requires downloaded YOLO weights (skipped when absent)"]
+
+[tool.coverage.run]
+source = ["visionguard_ml"]
+omit = ["*/ultralytics_yolo.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

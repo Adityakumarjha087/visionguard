@@ -1,0 +1,32 @@
+# general
+.DS_Store
+.env
+*.log
+coverage/
+.coverage
+coverage.out
+htmlcov/
+# python
+__pycache__/
+*.pyc
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+# model weights & generated media (never commit)
+*.pt
+*.onnx
+*.engine
+ml/models/*
+!ml/models/.gitkeep
+ml/runs/
+ml/datasets/
+data/
+# node
+node_modules/
+.next/
+out/
+playwright-report/
+test-results/
+# go
+backend/bin/
