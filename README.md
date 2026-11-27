@@ -183,7 +183,9 @@ make e2e             # Playwright against the running stack
 | `VG_JWT_SECRET` | dev-only value | HS256 signing secret (≥ 16 chars) |
 | `VG_ACCESS_TTL` / `VG_REFRESH_TTL` | `15m` / `168h` | Token lifetimes |
 | `VG_DATABASE_URL` | compose TimescaleDB | PostgreSQL DSN |
-| `VG_REDIS_URL` | `redis://redis:6379/0` | Redis for streams/config |
+| `VG_REDIS_URL` | `redis://redis:6379/0` | Redis for streams/config; `memory://` starts an embedded in-process Redis (single instance only) |
+| `VG_SIMULATOR` | `false` | `true` runs an in-process stand-in for the inference service (synthetic frames, tracks, crossings and rule-driven incidents over the same Redis contract) |
+| `PORT` | – | Used as the listen port when `VG_PORT` is unset (PaaS convention) |
 | `VG_INFERENCE_URL` | `http://inference:8000` | Inference service (stream proxy) |
 | `VG_DATA_DIR` | `/data` | Shared volume: videos, snapshots, clips |
 | `VG_CORS_ORIGINS` | `http://localhost:20900,...` | Browser origin allow-list (also WebSocket) |
@@ -275,6 +277,18 @@ demo cameras, colour detector, 10 FPS target, privacy blur on):
    here).
 6. **Observability.** Scrape `/metrics` on the API and the inference service. Import
    `infra/grafana/dashboards/visionguard.json`.
+
+### Free-tier demo (Render + Neon + Vercel)
+
+The hosted demo runs a single API container built from `deploy/api.Dockerfile` (build context:
+repo root) with `VG_REDIS_URL=memory://` and `VG_SIMULATOR=true`: the CPU vision pipeline does
+not fit a 512 MB / 0.1 CPU instance, so an in-process simulator speaks the inference service's
+Redis contract instead and the dashboard, live overlay, incidents, analytics and snapshots all
+work end to end. Postgres is Neon: the migration uses the Apache-licensed TimescaleDB features
+(extension, hypertables) when available and skips the community-only ones (retention policies,
+continuous aggregates) with a warning, falling back to a plain view and a `date_bin`-based
+`time_bucket()` on stock Postgres. Prometheus, Grafana, GPU inference and real incident clips
+are not part of the hosted demo.
 
 ## What I learned / key engineering decisions
 

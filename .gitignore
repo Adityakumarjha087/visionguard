@@ -30,3 +30,5 @@ playwright-report/
 test-results/
 # go
 backend/bin/
+# vercel
+.vercel

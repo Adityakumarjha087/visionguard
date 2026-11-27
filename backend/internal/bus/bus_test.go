@@ -95,3 +95,13 @@ func TestTailFrames(t *testing.T) {
 		t.Fatal("no frame received")
 	}
 }
+
+func TestMemoryBus(t *testing.T) {
+	b, err := bus.New(bus.MemoryURL)
+	require.NoError(t, err)
+	ctx := context.Background()
+	require.NoError(t, b.Ping(ctx))
+	require.NoError(t, b.PublishConfig(ctx, bus.ConfigDoc{Version: 1}))
+	require.NoError(t, b.Close())
+	assert.Error(t, b.Ping(ctx))
+}

@@ -33,6 +33,9 @@ type Config struct {
 	ConfigResync   time.Duration
 	ConsumerName   string
 	DefaultModel   string
+	// Simulate runs the in-process event simulator instead of relying on the inference
+	// service (used for the hosted demo where the CPU vision pipeline does not fit).
+	Simulate bool
 }
 
 // SMTPConfig configures optional email notifications (disabled when Host is empty).
@@ -56,7 +59,7 @@ type TelegramConfig struct {
 func Load() (Config, error) {
 	cfg := Config{
 		Env:            env("VG_ENV", "development"),
-		Port:           envInt("VG_PORT", 8080),
+		Port:           envInt("VG_PORT", envInt("PORT", 8080)),
 		DatabaseURL:    env("VG_DATABASE_URL", "postgres://visionguard:visionguard@localhost:20910/visionguard?sslmode=disable"),
 		RedisURL:       env("VG_REDIS_URL", "redis://localhost:20911/0"),
 		InferenceURL:   strings.TrimRight(env("VG_INFERENCE_URL", "http://localhost:20902"), "/"),
@@ -75,6 +78,7 @@ func Load() (Config, error) {
 		ConfigResync:   envDuration("VG_CONFIG_RESYNC", 30*time.Second),
 		ConsumerName:   env("VG_CONSUMER_NAME", hostname()),
 		DefaultModel:   env("VG_DEFAULT_MODEL", "color-synthetic"),
+		Simulate:       env("VG_SIMULATOR", "false") == "true",
 		SMTP: SMTPConfig{
 			Host:     env("VG_SMTP_HOST", ""),
 			Port:     envInt("VG_SMTP_PORT", 587),

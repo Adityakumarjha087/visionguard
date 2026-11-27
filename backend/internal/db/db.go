@@ -98,6 +98,10 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 				continue
 			}
 			if _, err := conn.Exec(ctx, chunk); err != nil {
+				if feature, ok := optionalChunk(chunk); ok {
+					slog.Warn("optional migration step skipped", "migration", name, "feature", feature, "err", err)
+					continue
+				}
 				return fmt.Errorf("apply migration %s: %w", name, err)
 			}
 		}
@@ -107,4 +111,23 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 		slog.Info("applied migration", "name", name)
 	}
 	return nil
+}
+
+// optionalChunk reports whether a migration chunk is marked "-- optional: <feature>" in its
+// leading comment block. Such chunks degrade gracefully (each chunk runs as one implicit
+// transaction, so a failure leaves nothing half-applied).
+func optionalChunk(chunk string) (string, bool) {
+	for _, line := range strings.Split(chunk, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.HasPrefix(line, "--") {
+			break
+		}
+		if feature, ok := strings.CutPrefix(line, "-- optional:"); ok {
+			return strings.TrimSpace(feature), true
+		}
+	}
+	return "", false
 }

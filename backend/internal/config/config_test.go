@@ -35,3 +35,18 @@ func TestProductionRequiresSecret(t *testing.T) {
 	_, err = Load()
 	assert.NoError(t, err)
 }
+
+func TestPortFallsBackToPlatformPort(t *testing.T) {
+	t.Setenv("PORT", "10000")
+	cfg, err := Load()
+	require.NoError(t, err)
+	assert.Equal(t, 10000, cfg.Port)
+	assert.False(t, cfg.Simulate)
+
+	t.Setenv("VG_PORT", "8081")
+	t.Setenv("VG_SIMULATOR", "true")
+	cfg, err = Load()
+	require.NoError(t, err)
+	assert.Equal(t, 8081, cfg.Port)
+	assert.True(t, cfg.Simulate)
+}

@@ -32,7 +32,16 @@ type Server struct {
 	Issuer *auth.Issuer
 	Hub    *ws.Hub
 	Syncer *ingest.Syncer
+	// Frames, when set, serves camera streams/snapshots in-process (simulator mode)
+	// instead of proxying the inference service.
+	Frames FrameSource
 	proxy  *httputil.ReverseProxy
+}
+
+// FrameSource provides the latest JPEG frame per camera.
+type FrameSource interface {
+	JPEG(cameraID string) []byte
+	Interval() time.Duration
 }
 
 // New constructs the server.

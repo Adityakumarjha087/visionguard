@@ -21,6 +21,7 @@ import (
 	"visionguard/backend/internal/ingest"
 	"visionguard/backend/internal/notify"
 	"visionguard/backend/internal/seed"
+	"visionguard/backend/internal/sim"
 	"visionguard/backend/internal/store"
 	"visionguard/backend/internal/ws"
 )
@@ -82,7 +83,7 @@ func run(ctx context.Context, cmd string, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = b.R.Close() }()
+	defer func() { _ = b.Close() }()
 	issuer := auth.NewIssuer(cfg.JWTSecret, cfg.JWTIssuer, cfg.AccessTTL, cfg.RefreshTTL)
 	hub := ws.NewHub(cfg.CORSOrigins)
 	syncer := &ingest.Syncer{Store: st, Bus: b, DefaultModel: cfg.DefaultModel}
@@ -92,9 +93,15 @@ func run(ctx context.Context, cmd string, cfg config.Config) error {
 	go b.ConsumeEvents(ctx, cfg.ConsumerName, proc.Handle)
 	go b.TailFrames(ctx, hub.PublishFrame)
 
+	api := httpapi.New(cfg, st, b, issuer, hub, syncer)
+	if cfg.Simulate {
+		simulator := sim.New(b, sim.Options{DataDir: cfg.DataDir})
+		api.Frames = simulator
+		go simulator.Run(ctx)
+	}
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           httpapi.New(cfg, st, b, issuer, hub, syncer).Router(),
+		Handler:           api.Router(),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}

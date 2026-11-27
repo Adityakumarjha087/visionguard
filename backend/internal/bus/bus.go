@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
 
 	"visionguard/backend/internal/domain"
@@ -23,18 +24,40 @@ const (
 	ConsumerGroup = "api"
 )
 
+// MemoryURL selects an embedded, in-process Redis (single-instance demo deployments
+// without a Redis server; state is lost on restart).
+const MemoryURL = "memory://"
+
 // Bus wraps a Redis client.
 type Bus struct {
-	R *redis.Client
+	R   *redis.Client
+	mem *miniredis.Miniredis
 }
 
-// New connects to Redis from a URL.
+// New connects to Redis from a URL, or starts an embedded server for MemoryURL.
 func New(url string) (*Bus, error) {
+	if url == MemoryURL {
+		mem, err := miniredis.Run()
+		if err != nil {
+			return nil, err
+		}
+		slog.Warn("using embedded in-memory redis (single instance only)")
+		return &Bus{R: redis.NewClient(&redis.Options{Addr: mem.Addr()}), mem: mem}, nil
+	}
 	opts, err := redis.ParseURL(url)
 	if err != nil {
 		return nil, err
 	}
 	return &Bus{R: redis.NewClient(opts)}, nil
+}
+
+// Close releases the client (and the embedded server, if any).
+func (b *Bus) Close() error {
+	err := b.R.Close()
+	if b.mem != nil {
+		b.mem.Close()
+	}
+	return err
 }
 
 // Ping checks connectivity.

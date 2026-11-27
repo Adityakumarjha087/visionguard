@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -267,11 +269,53 @@ func (s *Server) proxyInference(c *gin.Context, prefix string) {
 		abort(c, err)
 		return
 	}
+	if s.Frames != nil {
+		s.serveLocalFrames(c, id, prefix == "/stream/")
+		return
+	}
 	req := c.Request.Clone(c.Request.Context())
 	req.URL.Path = prefix + id
 	req.URL.RawQuery = ""
 	req.Header.Del("Authorization")
 	s.proxy.ServeHTTP(c.Writer, req)
+}
+
+// serveLocalFrames serves a single JPEG or an MJPEG stream from the in-process FrameSource.
+func (s *Server) serveLocalFrames(c *gin.Context, id string, stream bool) {
+	if !stream {
+		jpg := s.Frames.JPEG(id)
+		if jpg == nil {
+			abort(c, &APIError{Status: http.StatusServiceUnavailable, Code: "unavailable", Message: "no frame yet"})
+			return
+		}
+		c.Header("Cache-Control", "no-store")
+		c.Data(http.StatusOK, "image/jpeg", jpg)
+		return
+	}
+	const boundary = "frame"
+	c.Header("Content-Type", "multipart/x-mixed-replace; boundary="+boundary)
+	c.Header("Cache-Control", "no-store")
+	c.Header("X-Accel-Buffering", "no")
+	c.Status(http.StatusOK)
+	ticker := time.NewTicker(s.Frames.Interval())
+	defer ticker.Stop()
+	ctx := c.Request.Context()
+	for {
+		if jpg := s.Frames.JPEG(id); jpg != nil {
+			if _, err := fmt.Fprintf(c.Writer, "--%s\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", boundary, len(jpg)); err != nil {
+				return
+			}
+			if _, err := c.Writer.Write(append(jpg, '\r', '\n')); err != nil {
+				return
+			}
+			c.Writer.Flush()
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
 }
 
 // media serves snapshots/clips from the shared volume (Range requests supported for video).

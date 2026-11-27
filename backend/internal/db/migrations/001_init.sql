@@ -1,5 +1,11 @@
 -- VisionGuard schema: relational config + TimescaleDB hypertables for time-series events.
+--
+-- Chunks starting with "-- optional:" may fail (e.g. managed Postgres that ships only the
+-- Apache-licensed TimescaleDB build, or no TimescaleDB at all); the migrator then logs a
+-- warning and continues, and the fallback chunks below keep the schema usable on plain Postgres.
+-- optional: timescaledb extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
+-- statement-break
 
 CREATE TABLE users (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -92,7 +98,6 @@ CREATE TABLE detection_counts (
     object_class text NOT NULL,
     count        integer NOT NULL
 );
-SELECT create_hypertable('detection_counts', 'ts', chunk_time_interval => interval '1 day');
 CREATE INDEX detection_counts_cam_idx ON detection_counts (camera_id, ts DESC);
 
 CREATE TABLE track_points (
@@ -103,7 +108,6 @@ CREATE TABLE track_points (
     x            real NOT NULL,
     y            real NOT NULL
 );
-SELECT create_hypertable('track_points', 'ts', chunk_time_interval => interval '1 day');
 CREATE INDEX track_points_cam_idx ON track_points (camera_id, ts DESC);
 
 CREATE TABLE line_crossings (
@@ -114,14 +118,31 @@ CREATE TABLE line_crossings (
     object_class text NOT NULL,
     direction    text NOT NULL CHECK (direction IN ('in', 'out'))
 );
-SELECT create_hypertable('line_crossings', 'ts', chunk_time_interval => interval '1 day');
 CREATE INDEX line_crossings_cam_idx ON line_crossings (camera_id, ts DESC);
 
+-- statement-break
+-- optional: hypertables (TimescaleDB Apache features)
+SELECT create_hypertable('detection_counts', 'ts', chunk_time_interval => interval '1 day');
+SELECT create_hypertable('track_points', 'ts', chunk_time_interval => interval '1 day');
+SELECT create_hypertable('line_crossings', 'ts', chunk_time_interval => interval '1 day');
+-- statement-break
+-- optional: retention policies (TimescaleDB community features)
 SELECT add_retention_policy('track_points', interval '7 days');
 SELECT add_retention_policy('detection_counts', interval '30 days');
 SELECT add_retention_policy('line_crossings', interval '90 days');
-
 -- statement-break
+-- Fallback: time_bucket() for plain Postgres (same default origin as TimescaleDB).
+DO $$
+BEGIN
+    IF to_regprocedure('time_bucket(interval, timestamp with time zone)') IS NULL THEN
+        EXECUTE $f$CREATE FUNCTION time_bucket(bucket_width interval, ts timestamptz)
+            RETURNS timestamptz LANGUAGE sql IMMUTABLE PARALLEL SAFE
+            AS 'SELECT date_bin(bucket_width, ts, TIMESTAMPTZ ''2000-01-03 00:00:00+00'')'$f$;
+    END IF;
+END
+$$;
+-- statement-break
+-- optional: continuous aggregate (TimescaleDB community features)
 -- Per-minute rollup used for long time ranges on the analytics page.
 CREATE MATERIALIZED VIEW detection_counts_1m
 WITH (timescaledb.continuous) AS
@@ -131,8 +152,22 @@ FROM detection_counts
 GROUP BY bucket, camera_id, object_class
 WITH NO DATA;
 -- statement-break
+-- optional: continuous aggregate refresh policy
 SELECT add_continuous_aggregate_policy('detection_counts_1m',
     start_offset => interval '2 hours', end_offset => interval '1 minute', schedule_interval => interval '1 minute');
+-- statement-break
+-- Fallback: plain view with the same shape when continuous aggregates are unavailable.
+DO $$
+BEGIN
+    IF to_regclass('detection_counts_1m') IS NULL THEN
+        CREATE VIEW detection_counts_1m AS
+        SELECT time_bucket('1 minute', ts) AS bucket, camera_id, object_class,
+               avg(count)::real AS avg_count, max(count) AS max_count
+        FROM detection_counts
+        GROUP BY bucket, camera_id, object_class;
+    END IF;
+END
+$$;
 -- statement-break
 
 CREATE TABLE models (
