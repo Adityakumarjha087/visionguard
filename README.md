@@ -9,6 +9,18 @@ short event clip and an AI-written incident description, all on one web dashboar
 > a deterministic "fake" vision LLM. Real YOLO11n (PyTorch/ONNX) and real vision LLMs (Claude,
 > OpenAI, Gemini, Ollama) are one setting away.
 
+## Live demo
+
+| | |
+|---|---|
+| **App** | [visionguard-zeta.vercel.app](https://visionguard-zeta.vercel.app) |
+| **API docs** | [visionguard-api-8yaf.onrender.com/api/docs](https://visionguard-api-8yaf.onrender.com/api/docs) |
+| **Health** | [visionguard-api-8yaf.onrender.com/healthz](https://visionguard-api-8yaf.onrender.com/healthz) |
+| **Demo login** | `admin@visionguard.dev` / `admin12345` (also `operator@…` / `operator12345`) |
+
+> Hosted on free tiers (Vercel + Render + Neon Postgres). The backend sleeps after 15 minutes idle, so the
+> first request can take about a minute — open the health link first. Demo limits: YOLO inference replaced by the in-process simulator; Prometheus/Grafana not deployed.
+
 ## Features
 
 | # | Feature | Where |
